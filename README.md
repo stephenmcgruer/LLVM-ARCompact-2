@@ -18,15 +18,17 @@ remember.
 
 First, get the sources:
 
-    git clone git://github.com/llvm-dcpu16/llvm-dcpu16.git # Checkout LLVM
-    cd llvm-dcpu16/tools
-    git clone git://github.com/llvm-dcpu16/clang.git # Checkout Clang
+    git https://github.com/stephenmcgruer/LLVM-ARCompact-2.git llvm # Checkout LLVM
+    cd llvm 
+    git clone https://github.com/stephenmcgruer/Clang-ARCompact.git clang # Checkout Clang
 
 Then it is just a case of building LLVM:
 
-    mkdir ../build
-    cd ../build
-    make -j6
+    cd ../.. # Return to the top level directory
+    mkdir build
+    cd build
+    cmake ../llvm
+    make -j4
     
 ### Using LLVM-ARCompact ###
     
