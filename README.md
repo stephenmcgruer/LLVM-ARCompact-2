@@ -19,7 +19,7 @@ remember.
 First, get the sources:
 
     git https://github.com/stephenmcgruer/LLVM-ARCompact-2.git llvm # Checkout LLVM
-    cd llvm 
+    cd llvm/tools
     git clone https://github.com/stephenmcgruer/Clang-ARCompact.git clang # Checkout Clang
 
 Then it is just a case of building LLVM:
