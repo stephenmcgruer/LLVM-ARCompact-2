@@ -18,12 +18,12 @@
 using namespace llvm;
 
 void ARCompactFrameLowering::emitPrologue(MachineFunction &MF) const {
-  llvm_unreachable("Not yet implemented!");
+  // Do nothing.
 }
 
 void ARCompactFrameLowering::emitEpilogue(MachineFunction &MF,
                                        MachineBasicBlock &MBB) const {
-  llvm_unreachable("Not yet implemented!");
+  // Do nothing.
 }
 
 bool ARCompactFrameLowering::hasFP(const MachineFunction &MF) const {

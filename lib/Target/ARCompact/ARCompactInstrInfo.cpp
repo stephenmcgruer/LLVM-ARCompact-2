@@ -14,6 +14,8 @@
 #include "ARCompactInstrInfo.h"
 #include "ARCompactTargetMachine.h"
 
+#include "llvm/CodeGen/MachineInstrBuilder.h"
+
 #define GET_INSTRINFO_CTOR
 #include "ARCompactGenInstrInfo.inc"
 
@@ -22,4 +24,11 @@ using namespace llvm;
 ARCompactInstrInfo::ARCompactInstrInfo(ARCompactTargetMachine &TM)
   : ARCompactGenInstrInfo(),
     RI(TM, *this) {
+}
+
+void ARCompactInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
+    MachineBasicBlock::iterator I, DebugLoc DL, unsigned int DestReg,
+    unsigned int SrcReg, bool KillSrc) const {
+  BuildMI(MBB, I, DL, get(ARC::MOVrr), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
 }
