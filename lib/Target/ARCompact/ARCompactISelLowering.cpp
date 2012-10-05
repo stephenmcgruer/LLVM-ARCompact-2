@@ -59,6 +59,24 @@ ARCompactTargetLowering::ARCompactTargetLowering(ARCompactTargetMachine &tm)
   // a CMP and Bcc.
   setOperationAction(ISD::SELECT_CC,      MVT::i32,   Custom);
   setOperationAction(ISD::SELECT,         MVT::i32,   Expand);
+
+  // SETCC is expanded to ???
+  setOperationAction(ISD::SETCC,          MVT::i32,   Expand);
+
+  // SREM is expanded to ???
+  setOperationAction(ISD::SREM,           MVT::i32,   Expand);
+
+  // SDIV is expanded to ???
+  setOperationAction(ISD::SDIV,           MVT::i32,   Expand);
+
+  // SDIVREM is expanded to ???
+  setOperationAction(ISD::SDIVREM,        MVT::i32,   Expand);
+
+  // Expand UDIV too.
+  setOperationAction(ISD::UDIV,           MVT::i32,   Expand);
+
+  // UDIVREM
+  setOperationAction(ISD::UDIVREM,        MVT::i32,   Expand);
 }
 
 SDValue ARCompactTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG)
