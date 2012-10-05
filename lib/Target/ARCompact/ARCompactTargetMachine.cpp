@@ -50,6 +50,7 @@ public:
   }
 
   virtual bool addInstSelector();
+  virtual bool addPreSched2();
 };
 } // namespace
 
@@ -60,5 +61,13 @@ TargetPassConfig *ARCompactTargetMachine::createPassConfig(PassManagerBase &PM) 
 bool ARCompactPassConfig::addInstSelector() {
   // Install an instruction selector.
   addPass(createARCompactISelDag(getARCompactTargetMachine(), getOptLevel()));
+  return false;
+}
+
+bool ARCompactPassConfig::addPreSched2() {
+  // Install an if converter.
+  if (getOptLevel() != CodeGenOpt::None) {
+    addPass(&IfConverterID);
+  }
   return false;
 }
