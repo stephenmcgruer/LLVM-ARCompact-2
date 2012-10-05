@@ -44,6 +44,9 @@ def ADDRrr : ComplexPattern<i32, 2, "SelectADDRrr",  [frameindex], []>;
 def ADDRrli : ComplexPattern<i32, 2, "SelectADDRrli", [frameindex], []>;
 def ADDRlir : ComplexPattern<i32, 2, "SelectADDRlir", [frameindex], []>;
 
+class BinOpFrag<dag res> : PatFrag<(ops node:$LHS, node:$RHS), res>;
+class UnOpFrag <dag res> : PatFrag<(ops node:$Src), res>;
+
 //===----------------------------------------------------------------------===//
 // ARCompact Operand Definitions.
 //===----------------------------------------------------------------------===//
@@ -121,6 +124,74 @@ multiclass GenPurposeInst<string opstring, SDNode OpNode> {
   //       multi-class.
 }
 
+// Models generic ALU operations that do not have a 16-bit version. (See
+// page 91.)
+multiclass ALUOp_no16<string opstring, PatFrag OpNode> {
+  def rr : Pseudo<(outs CPURegs:$dst),
+                  (ins CPURegs:$src1, CPURegs:$src2),
+                  !strconcat(opstring, " $dst,$src1,$src2"),
+                  [(set CPURegs:$dst, (OpNode CPURegs:$src1, CPURegs:$src2))]>;
+
+  def rui : Pseudo<(outs CPURegs:$dst),
+                   (ins CPURegs:$src1, i32imm:$src2),
+                   !strconcat(opstring, " $dst,$src1,$src2"),
+                   [(set CPURegs:$dst, (OpNode CPURegs:$src1, uimm6:$src2))]>;
+
+  let Constraints = "$src1 = $dst" in {
+    def rsi : Pseudo<(outs CPURegs:$dst),
+                     (ins CPURegs:$src1, i32imm:$src2),
+                     !strconcat(opstring, " $dst,$src1,$src2"),
+                     [(set CPURegs:$dst,
+                         (OpNode CPURegs:$src1, simm12:$src2))]>;
+  }
+
+  //def lir : Pseudo<(outs CPURegs:$dst),
+  //                 (ins i32imm:$src1, CPURegs:$src2),
+  //                 !strconcat(opstring, " $dst,$src1,$src2"),
+  //                 [(set CPURegs:$dst, (OpNode limm32:$src1, CPURegs:$src2))]>;
+
+  def rli : Pseudo<(outs CPURegs:$dst),
+                   (ins CPURegs:$src1, i32imm:$src2),
+                   !strconcat(opstring, " $dst,$src1,$src2"),
+                   [(set CPURegs:$dst, (OpNode CPURegs:$src1, limm32:$src2))]>;
+}
+
+// Models generic ALU operations that do have a 16-bit version. (See pages
+// 90-91).
+multiclass ALUOp<string opstring, PatFrag OpNode> : ALUOp_no16<opstring, OpNode> {
+  // Plus define the 16-bit version.
+  // TODO: Define the 16-bit version.
+  def alu_placeholder : Pseudo<(outs), (ins), "", []>;
+}
+
+// Models generic single operand operations that do not have a 16-bit version.
+// (See page 101.)
+multiclass SingleOperandOp_no16<string OpString, PatFrag OpNode> {
+  def r : Pseudo<(outs CPURegs:$dst),
+                 (ins CPURegs:$src),
+                 !strconcat(OpString, " $dst,$src"),
+                 [(set CPURegs:$dst, (OpNode CPURegs:$src))]>;
+
+  def ui : Pseudo<(outs CPURegs:$dst),
+                  (ins i32imm:$src),
+                  !strconcat(OpString, " $dst,$src"),
+                  [(set CPURegs:$dst, (OpNode uimm6:$src))]>;
+
+  def li : Pseudo<(outs CPURegs:$dst),
+                  (ins i32imm:$src),
+                  !strconcat(OpString, " $dst,$src"),
+                  [(set CPURegs:$dst, (OpNode limm32:$src))]>;
+}
+
+// Models generic single operand operations that have a 16-bit version. (See
+// page 101.)
+multiclass SingleOperandOp<string OpString, PatFrag OpNode>
+    : SingleOperandOp_no16<OpString, OpNode> {
+  // Plus define the 16-bit version.
+  // TODO: Define the 16-bit version.
+  def singleop_placeholder : Pseudo<(outs), (ins), "", []>;
+}
+
 //===----------------------------------------------------------------------===//
 // ARCompact Instructions.
 //===----------------------------------------------------------------------===//
@@ -141,6 +212,16 @@ let isReturn = 1, isTerminator = 1, hasDelaySlot = 1, isBarrier = 1 in {
 // General Instructions - Alphabetical Order.
 //
 
+// ADC - Page 179.
+//    Add two source operands together, along with the carry value, and place
+//    the result in the destination register.
+
+// TODO: Also model the case where the carry is used but not generated
+//       (i.e. matching 'add' not 'adde').
+let Defs = [STATUS32], Uses = [STATUS32] in {
+    defm ADC : GenPurposeInst<"adc.f", adde>;
+}
+
 // ADD - Page 180.
 //    Add two source operands together, and place the result in the destination
 //    register.
@@ -150,6 +231,31 @@ let isReturn = 1, isTerminator = 1, hasDelaySlot = 1, isBarrier = 1 in {
 //    situation is converted to "add a,b,limm" automatically.
 
 defm ADD : GenPurposeInst<"add", add>;
+
+// ADD1 - Page 182
+//    Add the first source operand to the second source operand bit-shifted
+//    left once (src2 << 1), and place the result in the destination register.
+
+defm ADD1 : ALUOp<"add1", BinOpFrag<(add node:$LHS, (shl node:$RHS, 1))>>;
+
+// ADD2 - Page 182
+//    Add the first source operand to the second source operand bit-shifted
+//    left twice (src2 << 2), and place the result in the destination register.
+
+defm ADD2 : ALUOp<"add2", BinOpFrag<(add node:$LHS, (shl node:$RHS, 2))>>;
+
+// ADD3 - Page 182
+//    Add the first source operand to the second source operand bit-shifted
+//    left three bits (src2 << 3), and place the result in the destination
+//    register.
+
+defm ADD3 : ALUOp<"add3", BinOpFrag<(add node:$LHS, (shl node:$RHS, 3))>>;
+
+// AND - Page 191.
+//    Takes the logical bitwise AND of two source operands, and places the
+//    result into the destination register.
+
+defm AND : ALUOp<"and", BinOpFrag<(and node:$LHS, node:$RHS)>>;
 
 // LD - Page 239.
 //    Loads the value stored at a memory address into the destination register.
@@ -227,6 +333,39 @@ let isAsCheapAsAMove = 1 in {
                       [(set CPURegs:$dst, limm32:$imm)]>;
 }
 
+// NEG - page 275.
+//    The source value is subtracted from 0 and the result placed in the
+//    destination register.
+//
+//    NEG only has a register-to-register version.
+
+def NEGrr : Pseudo<(outs CPURegs:$dst), (ins CPURegs:$src),
+                   "neg $dst,$src",
+                   [(set CPURegs:$dst, (ineg CPURegs:$src))]>;
+
+// NOT - page 283.
+//    Takes the logical bitwise NOT of the source operand, and places the
+//    result into the destination register.
+
+defm NOT : SingleOperandOp<"not", UnOpFrag<(not node:$Src)>>;
+
+// OR - page 284.
+//    Takes the logical bitwise OR of the source operands, and places the
+//    result into the destination register.
+
+defm OR : ALUOp<"or", BinOpFrag<(or node:$LHS, node:$RHS)>>;
+
+// SBC - page 302.
+//    Subtracts the second source operand from the first, and then also
+//    subtracts the carry from this value. The result is placed in the
+//    destination register.
+
+// TODO: Also model the case where the carry is used but not generated
+//       (i.e. matching 'sub' not 'sube').
+let Defs = [STATUS32], Uses = [STATUS32] in {
+    defm SBC : GenPurposeInst<"sbc.f", sube>;
+}
+
 // ST - page 310.
 //    Stores the value stored in the source operand in the destination memory
 //    address. The source operand may either be a register or a long immediate
@@ -264,3 +403,50 @@ def STrri_i16 : Pseudo<(outs), (ins MEMri:$addr, CPURegs:$src),
 def STrri_a : Pseudo<(outs), (ins MEMri:$addr, CPURegs:$src),
                       "st.a $src,$addr",
                       []>;
+
+// SUB - Page 312.
+//    Subtracts the second source operand from the first, and places the result
+//    into the destination register.
+
+defm SUB : ALUOp<"sub", BinOpFrag<(sub node:$LHS, node:$RHS)>>;
+
+// SUB also supports a "SUB a,limm,c" format.
+def SUBlir : Pseudo<(outs CPURegs:$dst), (ins i32imm:$src1, CPURegs:$src2),
+                      "sub $dst,$src1,$src2",
+                      [(set CPURegs:$dst, (sub limm32:$src1, CPURegs:$src2))]>;
+
+// Carry-producing sub.
+// TODO: Fold into a multi-class.
+let Defs = [STATUS32] in {
+  def SUBrr_f : Pseudo<(outs CPURegs:$dst), (ins CPURegs:$src1, CPURegs:$src2),
+                       "sub.f $dst,$src1,$src2",
+                       [(set CPURegs:$dst,
+                            (subc CPURegs:$src1, CPURegs:$src2))]>;
+}
+
+// SUB1 - Page 314.
+//    Subtracts the second source operand bit-shifted left once (src2 << 1)
+//    from the first source operand, and places the result in the destination
+//    register.
+
+defm SUB1 : ALUOp<"sub1", BinOpFrag<(sub node:$LHS, (shl node:$RHS, 1))>>;
+
+// SUB2 - Page 314.
+//    Subtracts the second source operand bit-shifted left twice (src2 << 2)
+//    from the first source operand, and places the result in the destination
+//    register.
+
+defm SUB2 : ALUOp<"sub2", BinOpFrag<(sub node:$LHS, (shl node:$RHS, 2))>>;
+
+// SUB3 - Page 314.
+//    Subtracts the second source operand bit-shifted left three bits
+//    (src2 << 3) from the first source operand, and places the result in
+//    the destination register.
+
+defm SUB3 : ALUOp<"sub3", BinOpFrag<(sub node:$LHS, (shl node:$RHS, 3))>>;
+
+// XOR - page 332.
+//    Takes the logical bitwise XOR of the source operands, and places the
+//    result into the destination register.
+
+defm XOR : ALUOp<"xor", BinOpFrag<(xor node:$LHS, node:$RHS)>>;
