@@ -39,6 +39,11 @@ namespace llvm {
       /// instruction.
       BR_CC,
 
+      /// SELECT_CC. Operand 0 and operand 1 are the lhs/rhs, operand 2 is the
+      /// true value, operand 3 is the false value, and operand 4 is the
+      /// condition code.
+      SELECT_CC,
+
       /// Wrapper - A wrapper node for TargetConstantPool, TargetExternalSymbol,
       /// and TargetGlobalAddress.
       Wrapper,
@@ -91,6 +96,10 @@ namespace llvm {
 
     SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerBR_CC(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const;
+    
+    MachineBasicBlock* EmitInstrWithCustomInserter(MachineInstr *MI,
+        MachineBasicBlock *BB) const;
 
     virtual EVT getSetCCResultType(EVT VT) const;
   };

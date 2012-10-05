@@ -30,10 +30,13 @@ def SDT_ARCCallSeqEnd   : SDCallSeqEnd<[SDTCisVT<0, i32>, SDTCisVT<1, i32>]>;
 def SDT_ARCWrapper      : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>,
                                                SDTCisPtrTy<0>]>;
 
-// Compare and branch.
+// Compare, branch and select.
 def SDT_ARCCmp          : SDTypeProfile<0, 2, [SDTCisSameAs<0, 1>]>;
 def SDT_ARCBrCC         : SDTypeProfile<0, 2, [SDTCisVT<0, OtherVT>,
                                                SDTCisVT<1, i32>]>;
+def SDT_ARCSelectCC     : SDTypeProfile<1, 3, [SDTCisSameAs<0, 1>,
+                                               SDTCisSameAs<1, 2>,
+                                               SDTCisVT<3, i32>]>;
 
 //===----------------------------------------------------------------------===//
 // ARCompact-specific node definitions.
@@ -53,10 +56,11 @@ def ARCcallseq_end :
 // Wrapper for Global Addresses etc.
 def ARCWrapper : SDNode<"ARCISD::Wrapper", SDT_ARCWrapper>;
 
-// Compare and branch.
+// Compare, branch, and select.
 def ARCcmp      : SDNode<"ARCISD::CMP", SDT_ARCCmp, [SDNPOutGlue]>;
 def ARCbrcc     : SDNode<"ARCISD::BR_CC", SDT_ARCBrCC, [SDNPHasChain,
                                                         SDNPInGlue]>;
+def ARCselectcc : SDNode<"ARCISD::SELECT_CC", SDT_ARCSelectCC, [SDNPInGlue]>;
 
 // The return flag for a function.
 def ARCretflag : SDNode<"ARCISD::RET_FLAG", SDTNone, [SDNPHasChain,
@@ -263,6 +267,14 @@ def NOP : Pseudo<(outs), (ins), "mov 0,0", []>;
 // A return is modelled as an explicit jump from BLINK.
 let isReturn = 1, isTerminator = 1, hasDelaySlot = 1, isBarrier = 1 in {
     def RET : Pseudo<(outs), (ins), "j [blink]", [(ARCretflag)]>;
+}
+
+let usesCustomInserter = 1 in {
+  def Select : Pseudo<(outs CPURegs:$dst),
+                      (ins CPURegs:$src, CPURegs:$src2, cc:$cc),
+                      "; Select PSEUDO",
+                      [(set CPURegs:$dst,
+                       (ARCselectcc CPURegs:$src, CPURegs:$src2, imm:$cc))]>;
 }
 
 //===----------------------------------------------------------------------===//

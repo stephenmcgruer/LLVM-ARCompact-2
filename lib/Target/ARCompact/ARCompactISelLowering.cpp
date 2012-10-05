@@ -18,6 +18,7 @@
 #include "ARCompactTargetMachine.h"
 
 #include "llvm/CodeGen/CallingConvLower.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 
@@ -53,6 +54,11 @@ ARCompactTargetLowering::ARCompactTargetLowering(ARCompactTargetMachine &tm)
   // BRCOND is expanded to ???, BR_CC is lowered to a CMP and Bcc.
   setOperationAction(ISD::BR_CC,          MVT::i32,   Custom);
   setOperationAction(ISD::BRCOND,         MVT::Other, Expand);
+
+  // SELECT is expanded to SELECT_CC, and SELECT_CC is custom lowered to
+  // a CMP and Bcc.
+  setOperationAction(ISD::SELECT_CC,      MVT::i32,   Custom);
+  setOperationAction(ISD::SELECT,         MVT::i32,   Expand);
 }
 
 SDValue ARCompactTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG)
@@ -60,6 +66,7 @@ SDValue ARCompactTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG)
   switch (Op.getOpcode()) {
     case ISD::GlobalAddress:    return LowerGlobalAddress(Op, DAG);
     case ISD::BR_CC:            return LowerBR_CC(Op, DAG);
+    case ISD::SELECT_CC:        return LowerSELECT_CC(Op, DAG);
     default:
       llvm_unreachable("unimplemented operand");
   }
@@ -467,6 +474,94 @@ SDValue ARCompactTargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG)
 
   return DAG.getNode(ARCISD::BR_CC, dl, Op.getValueType(),
       Chain, Dest, TargetCC, Flag);
+}
+
+SDValue ARCompactTargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG)
+    const {
+  // Arguments are the lhs, rhs, true value, false value, and condition code.
+  SDValue LHS     = Op.getOperand(0);
+  SDValue RHS     = Op.getOperand(1);
+  SDValue TrueV   = Op.getOperand(2);
+  SDValue FalseV  = Op.getOperand(3);
+  ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(4))->get();
+  DebugLoc dl    = Op.getDebugLoc();
+
+  SDValue TargetCC;
+
+  // Emit a compare instruction to perform the compare and return it
+  // so that the select can refer to it.
+  SDValue Flag = EmitCMP(LHS, RHS, TargetCC, CC, dl, DAG);
+
+  SDVTList VTs = DAG.getVTList(Op.getValueType(), MVT::Glue);
+  SmallVector<SDValue, 4> Ops;
+  Ops.push_back(TrueV);
+  Ops.push_back(FalseV);
+  Ops.push_back(TargetCC);
+  Ops.push_back(Flag);
+
+  // Lower it to an ARCISD::SELECT_CC, which EmitInstrWithCustomInserter
+  // will take care of.
+  return DAG.getNode(ARCISD::SELECT_CC, dl, VTs, &Ops[0], Ops.size());
+}
+
+MachineBasicBlock* ARCompactTargetLowering::EmitInstrWithCustomInserter(
+    MachineInstr *MI, MachineBasicBlock *BB) const {
+  const TargetInstrInfo &TII = *getTargetMachine().getInstrInfo();
+  DebugLoc dl = MI->getDebugLoc();
+  assert((MI->getOpcode() == ARC::Select) && "We can only emit SELECT_CC");
+
+  // TODO: We can totally use conditional instructions here, can't we?
+
+  // To "insert" a SELECT instruction, we actually have to insert the diamond
+  // control-flow pattern.  The incoming instruction knows the destination vreg
+  // to set, the condition code register to branch on, the true/false values to
+  // select between, and a branch opcode to use.
+  const BasicBlock *LLVM_BB = BB->getBasicBlock();
+  MachineFunction::iterator I = BB;
+  ++I;
+
+  // copy0MBB is the fallthrough block, copy1MBB is the branch
+  // block.
+  MachineBasicBlock *thisMBB = BB;
+  MachineFunction *F = BB->getParent();
+  MachineBasicBlock *copy0MBB = F->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *copy1MBB = F->CreateMachineBasicBlock(LLVM_BB);
+  F->insert(I, copy0MBB);
+  F->insert(I, copy1MBB);
+
+  // Update machine-CFG edges by transferring all successors of the current
+  // block to the new block which will contain the Phi node for the select.
+  copy1MBB->splice(copy1MBB->begin(), BB,
+                   llvm::next(MachineBasicBlock::iterator(MI)),
+                   BB->end());
+  copy1MBB->transferSuccessorsAndUpdatePHIs(BB);
+
+  // Next, add the true and fallthrough blocks as its successors.
+  BB->addSuccessor(copy0MBB);
+  BB->addSuccessor(copy1MBB);
+
+  BuildMI(BB, dl, TII.get(ARC::BCC)).addMBB(copy1MBB)
+      .addImm(MI->getOperand(3).getImm());
+
+  //  copy0MBB:
+  //   %FalseValue = ...
+  //   # fallthrough to copy1MBB
+  BB = copy0MBB;
+
+  // Update machine-CFG edges
+  BB->addSuccessor(copy1MBB);
+
+  //  copy1MBB:
+  //   %Result = phi [ %FalseValue, copy0MBB ], [ %TrueValue, thisMBB ]
+  //  ...
+  BB = copy1MBB;
+  BuildMI(*BB, BB->begin(), dl, TII.get(ARC::PHI),
+          MI->getOperand(0).getReg())
+    .addReg(MI->getOperand(2).getReg()).addMBB(copy0MBB)
+    .addReg(MI->getOperand(1).getReg()).addMBB(thisMBB);
+
+  MI->eraseFromParent();   // The pseudo instruction is gone now.
+  return BB;
 }
 
 EVT ARCompactTargetLowering::getSetCCResultType(EVT VT) const {
