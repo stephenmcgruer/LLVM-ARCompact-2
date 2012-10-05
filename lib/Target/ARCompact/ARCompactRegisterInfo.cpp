@@ -17,6 +17,8 @@
 #include "ARCompact.h"
 #include "ARCompactMachineFunctionInfo.h"
 #include "ARCompactTargetMachine.h"
+
+#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/ADT/BitVector.h"
@@ -25,6 +27,20 @@
 #include "ARCompactGenRegisterInfo.inc"
 
 using namespace llvm;
+
+static bool IsStore(MachineInstr &MI) {
+  // TODO: Set "isStore" variable on such instructions, check for that.
+  switch (MI.getOpcode()) {
+    case ARC::STrri:
+    case ARC::STrli:
+    case ARC::STliri:
+    case ARC::STrri_i8:
+    case ARC::STrri_i16:
+      return true;
+    default:
+      return false;
+  }
+}
 
 ARCompactRegisterInfo::ARCompactRegisterInfo(ARCompactTargetMachine &tm,
                                        const TargetInstrInfo &tii)
@@ -59,8 +75,43 @@ BitVector ARCompactRegisterInfo::getReservedRegs(const MachineFunction &MF)
 }
 
 void ARCompactRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
-    int ARCAdj, RegScavenger *RS) const {
-  llvm_unreachable("Not implemented yet!");
+    int SPAdj, RegScavenger *RS) const {
+  assert(SPAdj == 0 && "Unexpected non-zero adjustment!");
+
+  // Find the frame index operand.
+  unsigned i = 0;
+  MachineInstr &MI = *II;
+  while (!MI.getOperand(i).isFI()) {
+    ++i;
+    assert(i < MI.getNumOperands() && "Instr doesn't have FrameIndex operand!");
+  }
+  int FrameIndex = MI.getOperand(i).getIndex();
+
+  // Addressable stack objects are accessed using negative offsets from the
+  // frame pointer.
+  MachineFunction &MF = *MI.getParent()->getParent();
+  int Offset = MF.getFrameInfo()->getObjectOffset(FrameIndex) +
+      MI.getOperand(i + 1).getImm();
+
+  // Replace the frame index with a frame pointer reference.
+  if (IsStore(MI)) {
+    // Store instructions have at most a 9-bit signed immediate offset. Therefore,
+    // if the offset is outside this range we need to do something.
+    // TODO: What should we do?
+    if (Offset >= -256 && Offset <= 255) {
+      MI.getOperand(i).ChangeToRegister(ARC::FP, false);
+      MI.getOperand(i+1).ChangeToImmediate(Offset);
+    } else {
+      MI.getOperand(i).ChangeToRegister(ARC::FP, false);
+      MI.getOperand(i+1).ChangeToImmediate(255);
+      //llvm_unreachable("Offset immediate too small or too big!");
+    }
+  } else {
+    // For now, just default to converting the frame index.
+    // TODO: What other instructions hit this function - load?
+    MI.getOperand(i).ChangeToRegister(ARC::FP, false);
+    MI.getOperand(i+1).ChangeToImmediate(Offset);
+  }
 }
 
 unsigned ARCompactRegisterInfo::getFrameRegister(const MachineFunction &MF)

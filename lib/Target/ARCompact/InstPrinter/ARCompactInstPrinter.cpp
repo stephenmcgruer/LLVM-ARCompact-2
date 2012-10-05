@@ -46,3 +46,20 @@ void ARCompactInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
     llvm_unreachable("Unknown operand in ARCompactInstPrinter::printOperand!");
   }
 }
+
+void ARCompactInstPrinter::printMemOperand(const MCInst *MI, unsigned OpNo,
+    raw_ostream &O) {
+  O << "[";
+  printOperand(MI, OpNo, O);
+
+  if (MI->getNumOperands() > 1) {
+    MCOperand MO = MI->getOperand(OpNo + 1);
+    // Only print the second part if it is non-zero, i.e. never print [r1, 0]!
+    if (!MO.isImm() || MO.getImm() != 0) {
+      O << ",";
+      printOperand(MI, OpNo + 1, O);
+    }
+  }
+
+  O << "]";
+}

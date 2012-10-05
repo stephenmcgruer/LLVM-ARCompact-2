@@ -26,6 +26,10 @@ namespace llvm {
       // Start at the end of the built-in ops.
       FIRST_NUMBER = ISD::BUILTIN_OP_END,
 
+      /// Wrapper - A wrapper node for TargetConstantPool, TargetExternalSymbol,
+      /// and TargetGlobalAddress.
+      Wrapper,
+
       // Return with a flag.
       RET_FLAG
     };

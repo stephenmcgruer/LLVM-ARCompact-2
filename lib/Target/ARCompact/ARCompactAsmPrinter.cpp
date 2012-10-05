@@ -40,8 +40,8 @@ namespace {
 
     void printOperand(const MachineInstr *MI, int OpNum,
         raw_ostream &O, const char* Modifier = 0);
-    //void printSrcMemOperand(const MachineInstr *MI, int OpNum,
-    //                        raw_ostream &O);
+    void printMemOperand(const MachineInstr *MI, int OpNum,
+        raw_ostream &O);
     //bool PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
     //                     unsigned AsmVariant, const char *ExtraCode,
     //                     raw_ostream &O);
@@ -105,25 +105,22 @@ void ARCompactAsmPrinter::printOperand(const MachineInstr *MI, int OpNum,
   }
 }
 
-//void ARCompactAsmPrinter::printSrcMemOperand(const MachineInstr *MI, int OpNum,
-//                                          raw_ostream &O) {
-//  const MachineOperand &Base = MI->getOperand(OpNum);
-//  const MachineOperand &Disp = MI->getOperand(OpNum+1);
-//
-//  // Print displacement first
-//
-//  // Imm here is in fact global address - print extra modifier.
-//  if (Disp.isImm() && !Base.getReg())
-//    O << '&';
-//  printOperand(MI, OpNum+1, O, "nohash");
-//
-//  // Print register base field
-//  if (Base.getReg()) {
-//    O << '(';
-//    printOperand(MI, OpNum, O);
-//    O << ')';
-//  }
-//}
+void ARCompactAsmPrinter::printMemOperand(const MachineInstr *MI, int OpNum,
+    raw_ostream &O) {
+  O << "[";
+  printOperand(MI, OpNum, O);
+
+  if (MI->getNumOperands() > 1) {
+    MachineOperand MO = MI->getOperand(OpNum + 1);
+    // Only print the second part if it is non-zero, i.e. never print [r1, 0]!
+    if (MO.getType() != MachineOperand::MO_Immediate || MO.getImm() != 0) {
+      O << ",";
+      printOperand(MI, OpNum + 1, O);
+    }
+  }
+
+  O << "]";
+}
 //
 ///// PrintAsmOperand - Print out an operand for an inline asm expression.
 /////

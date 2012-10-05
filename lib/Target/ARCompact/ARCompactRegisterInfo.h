@@ -44,7 +44,7 @@ struct ARCompactRegisterInfo : public ARCompactGenRegisterInfo {
   /// call frame setup and destroy pseudo instructions, such as ADJCALLSTACKUP
   /// and ADJCALLSTACKDOWN.
   void eliminateFrameIndex(MachineBasicBlock::iterator II, 
-                           int ARCAdj, RegScavenger *RS = NULL) const;
+                           int SPAdj, RegScavenger *RS = NULL) const;
 
   // Debug information queries.
   unsigned getFrameRegister(const MachineFunction &MF) const;

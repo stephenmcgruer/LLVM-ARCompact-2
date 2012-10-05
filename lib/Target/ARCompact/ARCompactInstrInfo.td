@@ -32,8 +32,32 @@ def ARCretflag : SDNode<"ARCISD::RET_FLAG", SDTNone, [SDNPHasChain,
 // Patterns which match different immediate types.
 // TODO: Are long-immediates signed or unsigned?
 def uimm6 : PatLeaf<(imm), [{ return isUInt<6>(N->getZExtValue()); }]>;
+def simm9 : PatLeaf<(imm), [{ return isInt<9>(N->getSExtValue()); }]>;
 def simm12 : PatLeaf<(imm), [{ return isInt<12>(N->getSExtValue()); }]>;
 def limm32 : PatLeaf<(imm), [{ return isInt<32>(N->getSExtValue()); }]>;
+
+// Patterns which match addressing modes.
+def ADDRri : ComplexPattern<i32, 2, "SelectADDRri",  [frameindex], []>;
+def ADDRri2 : ComplexPattern<i32, 2, "SelectADDRri2", [frameindex], []>;
+def ADDRli : ComplexPattern<i32, 1, "SelectADDRli",  [frameindex], []>;
+
+//===----------------------------------------------------------------------===//
+// ARCompact Operand Definitions.
+//===----------------------------------------------------------------------===//
+
+// Memory addressing operands.
+
+// Register + signed immediate.
+def MEMri : Operand<i32> {
+  let PrintMethod = "printMemOperand";
+  let MIOperandInfo = (ops CPURegs, simm9);
+}
+
+// Long immediate.
+def MEMli : Operand<i32> {
+  let PrintMethod = "printMemOperand";
+  let MIOperandInfo = (ops limm32);
+}
 
 //===----------------------------------------------------------------------===//
 // ARCompact Multi-Classes.
@@ -131,3 +155,41 @@ let isAsCheapAsAMove = 1 in {
                       "mov $dst,$imm",
                       [(set CPURegs:$dst, limm32:$imm)]>;
 }
+
+// ST - page 310.
+//    Stores the value stored in the source operand in the destination memory
+//    address. The source operand may either be a register or a long immediate
+//    value. The memory address may be given as a single long immediate, or
+//    as two operands whose values will be added together to get the address.
+//
+//    The suffixes given here refer to the whole instruction format - for
+//    example, rri means store a value from a register into an address given by
+//    a register + a signed 9-bit immediate.
+
+def STrri : Pseudo<(outs), (ins MEMri:$addr, CPURegs:$src),
+                  "st $src,$addr",
+                  [(store CPURegs:$src, ADDRri:$addr)]>;
+
+def STrli : Pseudo<(outs), (ins MEMli:$addr, CPURegs:$src),
+                  "st $src,$addr",
+                  [(store CPURegs:$src, ADDRli:$addr)]>;
+
+def STliri : Pseudo<(outs), (ins MEMri:$addr, i32imm:$src),
+                    "st $src,$addr",
+                    [(store limm32:$src, ADDRri2:$addr)]>;
+
+// Truncuated versions of STrri.
+// TODO: Add STrli, STliri.
+def STrri_i8 : Pseudo<(outs), (ins MEMri:$addr, CPURegs:$src),
+                      "stb $src,$addr",
+                      [(truncstorei8 CPURegs:$src, ADDRri:$addr)]>;
+
+def STrri_i16 : Pseudo<(outs), (ins MEMri:$addr, CPURegs:$src),
+                      "stw $src,$addr",
+                      [(truncstorei16 CPURegs:$src, ADDRri:$addr)]>;
+
+// Address-write back versions of ST. These are not pattern matched yet but
+// are provided for use by the prologue/epilogue emitters.
+def STrri_a : Pseudo<(outs), (ins MEMri:$addr, CPURegs:$src),
+                      "st.a $src,$addr",
+                      []>;
