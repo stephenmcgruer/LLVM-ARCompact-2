@@ -36,6 +36,47 @@ def simm12 : PatLeaf<(imm), [{ return isInt<12>(N->getSExtValue()); }]>;
 def limm32 : PatLeaf<(imm), [{ return isInt<32>(N->getSExtValue()); }]>;
 
 //===----------------------------------------------------------------------===//
+// ARCompact Multi-Classes.
+//===----------------------------------------------------------------------===//
+
+// Captures ARCompact general purpose instructions, which have the following
+// types:
+//
+//   * Register1 = Register2 op Register3
+//   * Register1 = Register2 op Unsigned Immediate
+//   * Register1 = Register1 op Signed Immediate
+//   * Register1 = Register2 op Long Immediate
+//
+multiclass GenPurposeInst<string opstring, SDNode OpNode> {
+  def rr : Pseudo<(outs CPURegs:$dst),
+                  (ins CPURegs:$src1, CPURegs:$src2),
+                  !strconcat(opstring, " $dst,$src1,$src2"),
+                  [(set CPURegs:$dst, (OpNode CPURegs:$src1, CPURegs:$src2))]>;
+
+  def rui : Pseudo<(outs CPURegs:$dst),
+                   (ins CPURegs:$src1, i32imm:$src2),
+                   !strconcat(opstring, " $dst,$src1,$src2"),
+                   [(set CPURegs:$dst, (OpNode CPURegs:$src1, uimm6:$src2))]>;
+
+  // In the signed-immediate case, the source and destination registers must be
+  // the same register, due to encoding constraints.
+  let Constraints = "$src1 = $dst" in {
+    def rsi : Pseudo<(outs CPURegs:$dst), (ins CPURegs:$src1, i32imm:$src2),
+                        !strconcat(opstring, " $dst,$src1,$src2"),
+                        [(set CPURegs:$dst,
+                            (OpNode CPURegs:$src1, simm12:$src2))]>;
+  }
+
+  def rli : Pseudo<(outs CPURegs:$dst), (ins CPURegs:$src1, i32imm:$src2),
+                   !strconcat(opstring, " $dst,$src1,$src2"),
+                   [(set CPURegs:$dst, (OpNode CPURegs:$src1, limm32:$src2))]>;
+
+  // TODO: Define .f versions (all), .cc versions (rr, rui, rli), and .cc.f
+  //       versions (rr, rui, rli). These *maybe* should go in a different
+  //       multi-class.
+}
+
+//===----------------------------------------------------------------------===//
 // ARCompact Instructions.
 //===----------------------------------------------------------------------===//
 
@@ -54,6 +95,16 @@ let isReturn = 1, isTerminator = 1, hasDelaySlot = 1, isBarrier = 1 in {
 //===----------------------------------------------------------------------===//
 // General Instructions - Alphabetical Order.
 //
+
+// ADD - Page 180.
+//    Add two source operands together, and place the result in the destination
+//    register.
+//
+//    ADD also supports a "add a,limm,c" format, but LLVM knows that add is
+//    commutative and so does not allow immediates on the LHS. Instead, this
+//    situation is converted to "add a,b,limm" automatically.
+
+defm ADD : GenPurposeInst<"add", add>;
 
 // MOV - Page 262.
 //    The contents of the source are moved into the destination register.
