@@ -30,6 +30,11 @@ def SDT_ARCCallSeqEnd   : SDCallSeqEnd<[SDTCisVT<0, i32>, SDTCisVT<1, i32>]>;
 def SDT_ARCWrapper      : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>,
                                                SDTCisPtrTy<0>]>;
 
+// Compare and branch.
+def SDT_ARCCmp          : SDTypeProfile<0, 2, [SDTCisSameAs<0, 1>]>;
+def SDT_ARCBrCC         : SDTypeProfile<0, 2, [SDTCisVT<0, OtherVT>,
+                                               SDTCisVT<1, i32>]>;
+
 //===----------------------------------------------------------------------===//
 // ARCompact-specific node definitions.
 //===----------------------------------------------------------------------===//
@@ -47,6 +52,11 @@ def ARCcallseq_end :
 
 // Wrapper for Global Addresses etc.
 def ARCWrapper : SDNode<"ARCISD::Wrapper", SDT_ARCWrapper>;
+
+// Compare and branch.
+def ARCcmp      : SDNode<"ARCISD::CMP", SDT_ARCCmp, [SDNPOutGlue]>;
+def ARCbrcc     : SDNode<"ARCISD::BR_CC", SDT_ARCBrCC, [SDNPHasChain,
+                                                        SDNPInGlue]>;
 
 // The return flag for a function.
 def ARCretflag : SDNode<"ARCISD::RET_FLAG", SDTNone, [SDNPHasChain,
@@ -109,6 +119,14 @@ def MEMlir : Operand<i32> {
   let PrintMethod = "printMemOperand";
   let MIOperandInfo = (ops limm32, CPURegs);
 }
+
+// Condition code operands.
+def cc : Operand<i32> {
+  let PrintMethod = "printCCOperand";
+}
+
+// Branch targets have OtherVT type.
+def brtarget : Operand<OtherVT>;
 
 //===----------------------------------------------------------------------===//
 // ARCompact Multi-Classes.
@@ -329,6 +347,28 @@ def ASRlir : Pseudo<(outs CPURegs:$dst), (ins i32imm:$src1, CPURegs:$src2),
                     "asr $dst,$src1,$src2",
                     [(set CPURegs:$dst, (sra limm32:$src1, CPURegs:$src2))]>;
 
+// Bcc - Page 206.
+//    Branches to another location, with an optional condition code. The
+//    condition is evaluated against the state of the condition bits in
+//    STATUS32; that is, the actual source of the condition must be computed
+//    previously.
+
+let isBranch = 1, isTerminator = 1 in {
+  // Unconditional branches.
+  let isBarrier = 1 in {
+      def B : Pseudo<(outs), (ins brtarget:$dst),
+                     "b @$dst",
+                     [(br bb:$dst)]>;
+  } // isBarrier
+
+  // Conditional branches.
+  let Uses = [STATUS32] in {
+      def BCC : Pseudo<(outs), (ins brtarget:$dst, cc:$cc),
+                       "b$cc @$dst",
+                       [(ARCbrcc bb:$dst, imm:$cc)]>;
+  } // Uses = [STATUS32]
+} // isBranch, isTerminator
+
 // BLcc - Page 212.
 //    When the specified condition code is met (cc = true in the unconditional
 //    case), the program jumps to the given label and the address of the BLcc
@@ -354,6 +394,33 @@ let isCall = 1 in {
     //                   [(ARCcall CPURegs:$dst)]>;
   } // Defs = [STATUS32], Uses = [SP]
 } // isCall
+
+// CMP - Page 225.
+//    Performs a comparison by subtracting the second source operand from the
+//    first, updating the condition flags based on the result. The actual
+//    result of the subtraction is discarded.
+
+let Defs = [STATUS32] in {
+  def CMPrr : Pseudo<(outs), (ins CPURegs:$src1, CPURegs:$src2),
+                      "cmp $src1,$src2",
+                      [(ARCcmp CPURegs:$src1, CPURegs:$src2)]>;
+
+  def CMPrsi : Pseudo<(outs), (ins CPURegs:$src1, i32imm:$src2),
+                      "cmp $src1,$src2",
+                      [(ARCcmp CPURegs:$src1, simm12:$src2)]>;
+
+  def CMPrui : Pseudo<(outs), (ins CPURegs:$src1, i32imm:$src2),
+                      "cmp $src1,$src2",
+                      [(ARCcmp CPURegs:$src1, uimm6:$src2)]>;
+
+  def CMPrli : Pseudo<(outs), (ins CPURegs:$src1, i32imm:$src2),
+                      "cmp $src1,$src2",
+                      [(ARCcmp CPURegs:$src1, limm32:$src2)]>;
+
+  def CMPlir : Pseudo<(outs), (ins i32imm:$src1, CPURegs:$src2),
+                      "cmp $src1,$src2",
+                      [(ARCcmp limm32:$src1, CPURegs:$src2)]>;
+} // Defs = [STATUS32]
 
 // LD - Page 239.
 //    Loads the value stored at a memory address into the destination register.

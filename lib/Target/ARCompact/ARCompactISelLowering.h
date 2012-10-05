@@ -30,6 +30,15 @@ namespace llvm {
       /// instruction, which includes a bunch of information.
       CALL,
 
+      /// CMP - Compare instruction.
+      CMP,
+
+      /// ARC conditional branches. Operand 0 is the chain operand, operand 1
+      /// is the block to branch if condition is true, operand 2 is the
+      /// condition code, and operand 3 is the flag operand produced by a CMP
+      /// instruction.
+      BR_CC,
+
       /// Wrapper - A wrapper node for TargetConstantPool, TargetExternalSymbol,
       /// and TargetGlobalAddress.
       Wrapper,
@@ -79,6 +88,10 @@ namespace llvm {
         const SmallVectorImpl<ISD::InputArg> &Ins,
         DebugLoc dl, SelectionDAG &DAG,
         SmallVectorImpl<SDValue> &InVals) const;
+
+    SDValue LowerBR_CC(SDValue Op, SelectionDAG &DAG) const;
+
+    virtual EVT getSetCCResultType(EVT VT) const;
   };
 } // namespace llvm
 

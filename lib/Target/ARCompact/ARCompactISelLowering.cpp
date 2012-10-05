@@ -41,11 +41,16 @@ ARCompactTargetLowering::ARCompactTargetLowering(ARCompactTargetMachine &tm)
 
   // We do not have division, so mark it as expensive.
   setIntDivIsCheap(false);
+
+  // BRCOND is expanded to ???, BR_CC is lowered to a CMP and Bcc.
+  setOperationAction(ISD::BR_CC,          MVT::i32,   Custom);
+  setOperationAction(ISD::BRCOND,         MVT::Other, Expand);
 }
 
 SDValue ARCompactTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG)
     const {
   switch (Op.getOpcode()) {
+    case ISD::BR_CC:            return LowerBR_CC(Op, DAG);
     default:
       llvm_unreachable("unimplemented operand");
   }
@@ -367,4 +372,81 @@ SDValue ARCompactTargetLowering::LowerCallResult(SDValue Chain, SDValue InFlag,
   }
 
   return Chain;
+}
+
+// Emits and returns an ARCompact compare instruction for the given
+// ISD::CondCode.
+static SDValue EmitCMP(SDValue &LHS, SDValue &RHS, SDValue &TargetCC,
+    ISD::CondCode CC, DebugLoc dl, SelectionDAG &DAG) {
+  //DEBUG(dbgs() << "ARCompactTargetLowering::EmitCMP()\n");
+  assert(!LHS.getValueType().isFloatingPoint() && "We don't do FP");
+
+  // From the ISD::CondCode documentation:
+  //   For integer, only the SETEQ,SETNE,SETLT,SETLE,SETGT,
+  //   SETGE,SETULT,SETULE,SETUGT, and SETUGE opcodes are used.
+
+  // FIXME: Handle jump negative someday
+  ARCCC::CondCodes TCC = ARCCC::COND_INVALID;
+  switch (CC) {
+    case ISD::SETEQ:
+      TCC = ARCCC::COND_EQ;
+      break;
+    case ISD::SETNE:
+      TCC = ARCCC::COND_NE;
+      break;
+    case ISD::SETLT:
+      TCC = ARCCC::COND_LT;
+      break;
+    case ISD::SETLE:
+      TCC = ARCCC::COND_LE;
+      break;
+    case ISD::SETGT:
+      TCC = ARCCC::COND_GT;
+      break;
+    case ISD::SETGE:
+      TCC = ARCCC::COND_GE;
+      break;
+    case ISD::SETULT:
+      TCC = ARCCC::COND_LO;
+      break;
+    case ISD::SETULE:
+      TCC = ARCCC::COND_LS;
+      break;
+    case ISD::SETUGT:
+      TCC = ARCCC::COND_HI;
+      break;
+    case ISD::SETUGE:
+      TCC = ARCCC::COND_HS;
+      break;
+    default:
+      llvm_unreachable("Invalid integer condition!");
+  }
+
+  TargetCC = DAG.getConstant(TCC, MVT::i32);
+  return DAG.getNode(ARCISD::CMP, dl, MVT::Glue, LHS, RHS);
+}
+
+SDValue ARCompactTargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG)
+    const {
+  // Arguments are the chain, the condition code, the lhs, the rhs, and the
+  // destination.
+  SDValue Chain = Op.getOperand(0);
+  ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(1))->get();
+  SDValue LHS   = Op.getOperand(2);
+  SDValue RHS   = Op.getOperand(3);
+  SDValue Dest  = Op.getOperand(4);
+  DebugLoc dl   = Op.getDebugLoc();
+
+  SDValue TargetCC;
+
+  // Emit a compare instruction to perform the compare and return it
+  // so that the branch can refer to it.
+  SDValue Flag = EmitCMP(LHS, RHS, TargetCC, CC, dl, DAG);
+
+  return DAG.getNode(ARCISD::BR_CC, dl, Op.getValueType(),
+      Chain, Dest, TargetCC, Flag);
+}
+
+EVT ARCompactTargetLowering::getSetCCResultType(EVT VT) const {
+  return MVT::i32;
 }

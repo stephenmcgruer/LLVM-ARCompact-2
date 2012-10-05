@@ -36,6 +36,7 @@ namespace llvm {
         const char *Modifier = 0);
     void printMemOperand(const MCInst *MI, unsigned OpNo,
         raw_ostream &O);
+    void printCCOperand(const MCInst *MI, unsigned OpNo, raw_ostream &O);
   };
 }
 

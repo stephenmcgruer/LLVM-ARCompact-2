@@ -65,3 +65,62 @@ void ARCompactInstPrinter::printMemOperand(const MCInst *MI, unsigned OpNo,
 
   O << "]";
 }
+
+// Prints a condition code, such as "eq".
+void ARCompactInstPrinter::printCCOperand(const MCInst *MI, unsigned OpNo,
+    raw_ostream &O) {
+  unsigned CC = MI->getOperand(OpNo).getImm();
+  switch (CC) {
+    case ARCCC::COND_AL:
+      O << "al";
+      break;
+    case ARCCC::COND_EQ:
+      O << "eq";
+      break;
+    case ARCCC::COND_NE:
+      O << "ne";
+      break;
+    case ARCCC::COND_P:
+      O << "p";
+      break;
+    case ARCCC::COND_N:
+      O << "n";
+      break;
+    case ARCCC::COND_LO:
+      O << "lo";
+      break;
+    case ARCCC::COND_HS:
+      O << "hs";
+      break;
+    case ARCCC::COND_V:
+      O << "v";
+      break;
+    case ARCCC::COND_NV:
+      O << "nv";
+      break;
+    case ARCCC::COND_GT:
+      O << "gt";
+      break;
+    case ARCCC::COND_GE:
+      O << "ge";
+      break;
+    case ARCCC::COND_LT:
+      O << "lt";
+      break;
+    case ARCCC::COND_LE:
+      O << "le";
+      break;
+    case ARCCC::COND_HI:
+      O << "hi";
+      break;
+    case ARCCC::COND_LS:
+      O << "ls";
+      break;
+    case ARCCC::COND_PNZ:
+      O << "pnz";
+      break;
+    default:
+      assert(0 && "Unsupported CC code");
+      break;
+  }
+}
