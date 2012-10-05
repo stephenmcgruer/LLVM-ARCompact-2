@@ -40,6 +40,9 @@ def limm32 : PatLeaf<(imm), [{ return isInt<32>(N->getSExtValue()); }]>;
 def ADDRri : ComplexPattern<i32, 2, "SelectADDRri",  [frameindex], []>;
 def ADDRri2 : ComplexPattern<i32, 2, "SelectADDRri2", [frameindex], []>;
 def ADDRli : ComplexPattern<i32, 1, "SelectADDRli",  [frameindex], []>;
+def ADDRrr : ComplexPattern<i32, 2, "SelectADDRrr",  [frameindex], []>;
+def ADDRrli : ComplexPattern<i32, 2, "SelectADDRrli", [frameindex], []>;
+def ADDRlir : ComplexPattern<i32, 2, "SelectADDRlir", [frameindex], []>;
 
 //===----------------------------------------------------------------------===//
 // ARCompact Operand Definitions.
@@ -57,6 +60,24 @@ def MEMri : Operand<i32> {
 def MEMli : Operand<i32> {
   let PrintMethod = "printMemOperand";
   let MIOperandInfo = (ops limm32);
+}
+
+// Register + register.
+def MEMrr : Operand<i32> {
+  let PrintMethod = "printMemOperand";
+  let MIOperandInfo = (ops CPURegs, CPURegs);
+}
+
+// Register + long immediate.
+def MEMrli : Operand<i32> {
+  let PrintMethod = "printMemOperand";
+  let MIOperandInfo = (ops CPURegs, limm32);
+}
+
+// Long immediate + register.
+def MEMlir : Operand<i32> {
+  let PrintMethod = "printMemOperand";
+  let MIOperandInfo = (ops limm32, CPURegs);
 }
 
 //===----------------------------------------------------------------------===//
@@ -129,6 +150,56 @@ let isReturn = 1, isTerminator = 1, hasDelaySlot = 1, isBarrier = 1 in {
 //    situation is converted to "add a,b,limm" automatically.
 
 defm ADD : GenPurposeInst<"add", add>;
+
+// LD - Page 239.
+//    Loads the value stored at a memory address into the destination register.
+//    The memory address may be given as a single long immediate, or as two
+//    operands whose values will be added together to get the address.
+//
+//    The suffixes given here refer to the memory address format - for example,
+//    ri means an address given by a register + a signed 9-bit immediate.
+
+def LDri : Pseudo<(outs CPURegs:$dst), (ins MEMri:$addr),
+                  "ld $dst,$addr",
+                  [(set CPURegs:$dst, (load ADDRri:$addr))]>;
+
+def LDli : Pseudo<(outs CPURegs:$dst), (ins MEMli:$addr),
+                   "ld $dst,$addr",
+                   [(set CPURegs:$dst, (load ADDRli:$addr))]>;
+
+def LDrr : Pseudo<(outs CPURegs:$dst), (ins MEMrr:$addr),
+                    "ld $dst,$addr",
+                    [(set CPURegs:$dst, (load ADDRrr:$addr))]>;
+
+def LDrli : Pseudo<(outs CPURegs:$dst), (ins MEMrli:$addr),
+                    "ld $dst,$addr",
+                    [(set CPURegs:$dst, (load ADDRrli:$addr))]>;
+
+def LDlir : Pseudo<(outs CPURegs:$dst), (ins MEMlir:$addr),
+                    "ld $dst,$addr",
+                    [(set CPURegs:$dst, (load ADDRlir:$addr))]>;
+
+// Zero-extend versions of LDri.
+// TODO: Add LDli, LDrr, LDrli, LDlir.
+
+def LDri_extb : Pseudo<(outs CPURegs:$dst), (ins MEMri:$addr),
+                       "ldb $dst,$addr",
+                       [(set CPURegs:$dst, (zextloadi8 ADDRri:$addr))]>;
+
+def LDri_extw : Pseudo<(outs CPURegs:$dst), (ins MEMri:$addr),
+                       "ldw $dst,$addr",
+                       [(set CPURegs:$dst, (zextloadi16 ADDRri:$addr))]>;
+
+// Sign-extend versions of LDri.
+// TODO: Add LDli, LDrr, LDrli, LDlir.
+
+def LDri_sextb : Pseudo<(outs CPURegs:$dst), (ins MEMri:$addr),
+                        "ldb.x $dst,$addr",
+                        [(set CPURegs:$dst, (sextloadi8 ADDRri:$addr))]>;
+
+def LDri_sextw : Pseudo<(outs CPURegs:$dst), (ins MEMri:$addr),
+                        "ldw.x $dst,$addr",
+                        [(set CPURegs:$dst, (sextloadi16 ADDRri:$addr))]>;
 
 // MOV - Page 262.
 //    The contents of the source are moved into the destination register.

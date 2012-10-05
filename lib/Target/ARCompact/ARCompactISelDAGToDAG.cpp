@@ -34,6 +34,9 @@ namespace {
     bool SelectADDRri(SDValue N, SDValue &Base, SDValue &Offset);
     bool SelectADDRri2(SDValue N, SDValue &Base, SDValue &Offset);
     bool SelectADDRli(SDValue N, SDValue &AddrOut);
+    bool SelectADDRrr(SDValue N, SDValue &R1, SDValue &R2);
+    bool SelectADDRrli(SDValue N, SDValue &R1, SDValue &Offset);
+    bool SelectADDRlir(SDValue N, SDValue &R1, SDValue &Offset);
 
     virtual const char *getPassName() const {
       return "ARCompact DAG->DAG Pattern Instruction Selection";
@@ -193,5 +196,29 @@ bool ARCompactDAGToDAGISel::SelectADDRli(SDValue Addr, SDValue &AddrOut) {
       break;
   }
 
+  return false;
+}
+
+/// Sets R1 and R2 to the values of the memory address operands, or
+/// return false if unable to process the memory address (e.g. if
+/// it is not a register, register address).
+bool ARCompactDAGToDAGISel::SelectADDRrr(SDValue Addr, SDValue &R1,
+    SDValue &R2) {
+  return false;
+}
+
+/// Sets R1 and Offset to the values of the memory address operands, or
+/// return false if unable to process the memory address (e.g. if
+/// it is not a register, long-immediate address).
+bool ARCompactDAGToDAGISel::SelectADDRrli(SDValue Addr, SDValue &R1,
+    SDValue &Offset) {
+  return false;
+}
+
+/// Sets Offset and R1 to the values of the memory address operands, or
+/// return false if unable to process the memory address (e.g. if
+/// it is not a long-immediate, register address).
+bool ARCompactDAGToDAGISel::SelectADDRlir(SDValue Addr, SDValue &Offset,
+    SDValue &R1) {
   return false;
 }
