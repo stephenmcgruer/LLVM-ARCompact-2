@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "ARCompactFrameLowering.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 
 using namespace llvm;
@@ -26,6 +27,6 @@ void ARCompactFrameLowering::emitEpilogue(MachineFunction &MF,
 }
 
 bool ARCompactFrameLowering::hasFP(const MachineFunction &MF) const {
-  return (DisableFramePointerElim(MF) ||
+  return (MF.getTarget().Options.DisableFramePointerElim(MF) ||
       MF.getFrameInfo()->hasVarSizedObjects());
 }
