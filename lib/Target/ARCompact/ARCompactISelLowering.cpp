@@ -42,6 +42,11 @@ ARCompactTargetLowering::ARCompactTargetLowering(ARCompactTargetMachine &tm)
   // We do not have division, so mark it as expensive.
   setIntDivIsCheap(false);
 
+  // We don't have 1-bit extension (i.e. for bools).
+  setLoadExtAction(ISD::EXTLOAD,  MVT::i1,  Promote);
+  setLoadExtAction(ISD::SEXTLOAD, MVT::i1,  Promote);
+  setLoadExtAction(ISD::ZEXTLOAD, MVT::i1,  Promote);
+
   // Global addresses are custom lowered to ARCISD:Wrappers.
   setOperationAction(ISD::GlobalAddress,  MVT::i32,   Custom);
 
