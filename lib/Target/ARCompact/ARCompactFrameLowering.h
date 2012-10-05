@@ -25,6 +25,8 @@ class ARCompactFrameLowering : public TargetFrameLowering {
 protected:
   const ARCompactSubtarget &STI;
 
+  // There are 4 bytes per word in ARCompact
+  static const int UNITS_PER_WORD = 4;
 public:
   explicit ARCompactFrameLowering(const ARCompactSubtarget &sti)
     : TargetFrameLowering(TargetFrameLowering::StackGrowsDown, 4, 0), STI(sti) {

@@ -405,6 +405,15 @@ def LDri_sextw : Pseudo<(outs CPURegs:$dst), (ins MEMri:$addr),
                         "ldw.x $dst,$addr",
                         [(set CPURegs:$dst, (sextloadi16 ADDRri:$addr))]>;
 
+// Address-write back versions of ST. These are not pattern matched yet but
+// are provided for use by the prologue/epilogue emitters.
+def LDri_a : Pseudo<(outs CPURegs:$src), (ins MEMri:$addr),
+                    "ld.a $src,$addr",
+                    []>;
+
+def LDri_ab : Pseudo<(outs CPURegs:$src), (ins MEMri:$addr),
+                    "ld.ab $src,$addr",
+                    []>;
 
 // LSR - Page 254.
 //    Logically shifts the source operand right, and places the result in the
