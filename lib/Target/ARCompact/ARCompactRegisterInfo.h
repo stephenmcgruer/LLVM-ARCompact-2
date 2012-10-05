@@ -54,6 +54,7 @@ struct ARCompactRegisterInfo : public ARCompactGenRegisterInfo {
 
   // Debug information queries.
   unsigned getFrameRegister(const MachineFunction &MF) const;
+  unsigned getRARegister() const;
 };
 
 } // end namespace llvm

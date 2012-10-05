@@ -125,3 +125,8 @@ unsigned ARCompactRegisterInfo::getFrameRegister(const MachineFunction &MF)
     const {
   return ARC::FP;
 }
+
+// Return-Address Register.
+unsigned ARCompactRegisterInfo::getRARegister() const {
+    return ARC::BLINK;
+}
