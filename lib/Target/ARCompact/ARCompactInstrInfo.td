@@ -18,6 +18,14 @@
 include "ARCompactInstrFormats.td"
 
 //===----------------------------------------------------------------------===//
+// ARCompact-specific node definitions.
+//===----------------------------------------------------------------------===//
+
+// The return flag for a function.
+def ARCretflag : SDNode<"ARCISD::RET_FLAG", SDTNone, [SDNPHasChain,
+                                                      SDNPOptInGlue]>;
+
+//===----------------------------------------------------------------------===//
 // ARCompact Instructions.
 //===----------------------------------------------------------------------===//
 
@@ -25,6 +33,10 @@ include "ARCompactInstrFormats.td"
 // Misc Instructions.
 //
 
+// A return is modelled as an explicit jump from BLINK.
+let isReturn = 1, isTerminator = 1, hasDelaySlot = 1, isBarrier = 1 in {
+    def RET : Pseudo<(outs), (ins), "j [blink]", [(ARCretflag)]>;
+}
+
 // The manual defines the preferred NOP asm as mov 0,0.
 def NOP : Pseudo<(outs), (ins), "mov 0,0", []>;
-
