@@ -50,7 +50,6 @@ public:
   }
 
   virtual bool addInstSelector();
-  virtual bool addPreEmitPass();
 };
 } // namespace
 
@@ -61,10 +60,5 @@ TargetPassConfig *ARCompactTargetMachine::createPassConfig(PassManagerBase &PM) 
 bool ARCompactPassConfig::addInstSelector() {
   // Install an instruction selector.
   addPass(createARCompactISelDag(getARCompactTargetMachine(), getOptLevel()));
-  return false;
-}
-
-bool ARCompactPassConfig::addPreEmitPass() {
-  // Must run branch selection immediately preceding the asm printer.
   return false;
 }
