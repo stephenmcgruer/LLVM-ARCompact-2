@@ -40,6 +40,12 @@ struct ARCompactRegisterInfo : public ARCompactGenRegisterInfo {
   /// considered unavailable at all times, e.g. SP, BLINK.
   BitVector getReservedRegs(const MachineFunction &MF) const;
 
+  ///  This method is called during prolog/epilog code insertion to eliminate
+  /// call frame setup and destroy pseudo instructions, such as ADJCALLSTACKUP
+  /// and ADJCALLSTACKDOWN.
+  void eliminateCallFramePseudoInstr(MachineFunction &MF,
+      MachineBasicBlock &MBB, MachineBasicBlock::iterator I) const;
+
   /// This method is called during prolog/epilog code insertion to eliminate
   /// call frame setup and destroy pseudo instructions, such as ADJCALLSTACKUP
   /// and ADJCALLSTACKDOWN.

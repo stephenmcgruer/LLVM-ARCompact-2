@@ -74,6 +74,13 @@ BitVector ARCompactRegisterInfo::getReservedRegs(const MachineFunction &MF)
   return Reserved;
 }
 
+void ARCompactRegisterInfo::eliminateCallFramePseudoInstr(MachineFunction &MF,
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator I) const {
+  // Simply discard ADJCALLSTACKDOWN and ADJCALLSTACKUP instructions - the
+  // callee takes care of moving the stack.
+  MBB.erase(I);
+}
+
 void ARCompactRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     int SPAdj, RegScavenger *RS) const {
   assert(SPAdj == 0 && "Unexpected non-zero adjustment!");

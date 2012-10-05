@@ -18,8 +18,35 @@
 include "ARCompactInstrFormats.td"
 
 //===----------------------------------------------------------------------===//
+// Type Profiles.
+//===----------------------------------------------------------------------===//
+
+// Call-related.
+def SDT_ARCCall         : SDTypeProfile<0, -1, [SDTCisVT<0, iPTR>]>;
+def SDT_ARCCallSeqStart : SDCallSeqStart<[SDTCisVT<0, i32>]>;
+def SDT_ARCCallSeqEnd   : SDCallSeqEnd<[SDTCisVT<0, i32>, SDTCisVT<1, i32>]>;
+
+// Wrapper for Global Addresses etc.
+def SDT_ARCWrapper      : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>,
+                                               SDTCisPtrTy<0>]>;
+
+//===----------------------------------------------------------------------===//
 // ARCompact-specific node definitions.
 //===----------------------------------------------------------------------===//
+
+// Call-related.
+def ARCcall :
+    SDNode<"ARCISD::CALL", SDT_ARCCall, [SDNPHasChain, SDNPOutGlue,
+                                         SDNPOptInGlue, SDNPVariadic]>;
+def ARCcallseq_start :
+    SDNode<"ISD::CALLSEQ_START", SDT_ARCCallSeqStart, [SDNPHasChain,
+                                                       SDNPOutGlue]>;
+def ARCcallseq_end :
+    SDNode<"ISD::CALLSEQ_END", SDT_ARCCallSeqEnd, [SDNPHasChain, SDNPOptInGlue,
+                                                   SDNPOutGlue]>;
+
+// Wrapper for Global Addresses etc.
+def ARCWrapper : SDNode<"ARCISD::Wrapper", SDT_ARCWrapper>;
 
 // The return flag for a function.
 def ARCretflag : SDNode<"ARCISD::RET_FLAG", SDTNone, [SDNPHasChain,
@@ -200,6 +227,18 @@ multiclass SingleOperandOp<string OpString, PatFrag OpNode>
 // Misc Instructions.
 //
 
+// ADJCALLSTACKDOWN/UP implicitly use/def SP because they may be expanded into
+// a stack adjustment and the codegen must know that they may modify the stack
+// pointer before prolog-epilog rewriting occurs.
+let Defs = [SP], Uses = [SP] in {
+  def ADJCALLSTACKDOWN : Pseudo<(outs), (ins i32imm:$amt),
+                                "#ADJCALLSTACKDOWN",
+                                [(ARCcallseq_start timm:$amt)]>;
+  def ADJCALLSTACKUP   : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
+                                "#ADJCALLSTACKUP",
+                                [(ARCcallseq_end timm:$amt1, timm:$amt2)]>;
+}
+
 // The manual defines the preferred NOP asm as mov 0,0.
 def NOP : Pseudo<(outs), (ins), "mov 0,0", []>;
 
@@ -290,6 +329,31 @@ def ASRlir : Pseudo<(outs CPURegs:$dst), (ins i32imm:$src1, CPURegs:$src2),
                     "asr $dst,$src1,$src2",
                     [(set CPURegs:$dst, (sra limm32:$src1, CPURegs:$src2))]>;
 
+// BLcc - Page 212.
+//    When the specified condition code is met (cc = true in the unconditional
+//    case), the program jumps to the given label and the address of the BLcc
+//    instruction is stored in the link register BLINK.
+
+// TODO: Add clobbered registers.
+// TODO: Should this clobber STATUS32 or not?
+// TODO: Add conditional branch + links.
+let isCall = 1 in {
+  // All calls clobber the non-callee saved registers. SP is marked as
+  // a use to prevent stack-pointer assignments that appear immediately
+  // before calls from potentially appearing dead.
+  let Defs = [R0, R1, R2, R3, R4, R5, R6, R7, T0, T1, T2, T3, T4, STATUS32],
+      Uses = [SP] in {
+    // Unconditional jump.
+    // TODO: Including the '@' may be a hack...
+    def BLi : Pseudo<(outs), (ins i32imm:$dst, variable_ops),
+                       "bl @$dst",
+                       [(ARCcall imm:$dst)]>;
+    // Branch and link can't handle a register source. Jump can.
+    //def JLr : Pseudo<(outs), (ins CPURegs:$dst, variable_ops),
+    //                   "jl [$dst]",
+    //                   [(ARCcall CPURegs:$dst)]>;
+  } // Defs = [STATUS32], Uses = [SP]
+} // isCall
 
 // LD - Page 239.
 //    Loads the value stored at a memory address into the destination register.
@@ -499,3 +563,15 @@ defm SUB3 : ALUOp<"sub3", BinOpFrag<(sub node:$LHS, (shl node:$RHS, 3))>>;
 //    result into the destination register.
 
 defm XOR : ALUOp<"xor", BinOpFrag<(xor node:$LHS, node:$RHS)>>;
+
+//===----------------------------------------------------------------------===//
+// ARCompact Non-Instruction Patterns.
+//===----------------------------------------------------------------------===//
+
+// GlobalAddress patterns.
+def : Pat<(i32 (ARCWrapper tglobaladdr:$dst)), (MOVrli tglobaladdr:$dst)>;
+def : Pat<(add CPURegs:$src1, (ARCWrapper tglobaladdr:$src2)),
+          (ADDrli CPURegs:$src1, tglobaladdr:$src2)>;
+
+// Calls.
+def : Pat<(ARCcall (i32 tglobaladdr:$dst)), (BLi tglobaladdr:$dst)>;

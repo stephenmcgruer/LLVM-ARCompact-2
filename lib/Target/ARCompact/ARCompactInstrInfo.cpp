@@ -22,7 +22,7 @@
 using namespace llvm;
 
 ARCompactInstrInfo::ARCompactInstrInfo(ARCompactTargetMachine &TM)
-  : ARCompactGenInstrInfo(),
+  : ARCompactGenInstrInfo(ARC::ADJCALLSTACKDOWN, ARC::ADJCALLSTACKUP),
     RI(TM, *this) {
 }
 

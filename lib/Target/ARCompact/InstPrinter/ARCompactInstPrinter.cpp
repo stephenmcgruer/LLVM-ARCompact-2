@@ -21,6 +21,7 @@
 #include "llvm/MC/MCExpr.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FormattedStream.h"
+#include "llvm/Support/Debug.h"
 using namespace llvm;
 
 
@@ -43,7 +44,8 @@ void ARCompactInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
   } else if (Op.isImm()) {
     O << Op.getImm();
   } else {
-    llvm_unreachable("Unknown operand in ARCompactInstPrinter::printOperand!");
+    assert(Op.isExpr() && "unknown operand kind in printOperand");
+    O << *Op.getExpr();
   }
 }
 
