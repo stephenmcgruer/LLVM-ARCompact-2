@@ -257,6 +257,40 @@ defm ADD3 : ALUOp<"add3", BinOpFrag<(add node:$LHS, (shl node:$RHS, 3))>>;
 
 defm AND : ALUOp<"and", BinOpFrag<(and node:$LHS, node:$RHS)>>;
 
+// ASL - Page 192.
+//    Arithmetically shifts the source operand left, and places the result in
+//    the destination register. The shift amount can be a constant 1 (in the
+//    two-operand version), or an amount given by a second source (in the
+//    three-operand version). If a second source is used, only the bottom
+//    5 bits of the source will be used.
+
+// Single-shift versions.
+defm ASL : SingleOperandOp<"asl", UnOpFrag<(shl node:$Src, 1)>>;
+
+// Multiple-shift versions.
+// TODO: Model the 5-bit limit somehow.
+defm ASL : ALUOp<"asl", BinOpFrag<(shl node:$LHS, node:$RHS)>>;
+
+// ASR - Page 197.
+//    Arithmetically shifts the source operand right, and places the result in
+//    the destination register. The shift amount can be a constant 1 (in the
+//    two-operand version), or an amount given by a second source (in the
+//    three-operand version). If a second source is used, only the bottom
+//    5 bits of the source will be used.
+
+// Single-shift versions.
+defm ASR : SingleOperandOp<"asr", UnOpFrag<(sra node:$Src, 1)>>;
+
+// Multiple-shift versions.
+// TODO: Model the 5-bit limit somehow?
+defm ASR : ALUOp<"asr", BinOpFrag<(sra node:$LHS, node:$RHS)>>;
+
+// ASR also supports a "ASR a,limm,c" format.
+def ASRlir : Pseudo<(outs CPURegs:$dst), (ins i32imm:$src1, CPURegs:$src2),
+                    "asr $dst,$src1,$src2",
+                    [(set CPURegs:$dst, (sra limm32:$src1, CPURegs:$src2))]>;
+
+
 // LD - Page 239.
 //    Loads the value stored at a memory address into the destination register.
 //    The memory address may be given as a single long immediate, or as two
@@ -306,6 +340,21 @@ def LDri_sextb : Pseudo<(outs CPURegs:$dst), (ins MEMri:$addr),
 def LDri_sextw : Pseudo<(outs CPURegs:$dst), (ins MEMri:$addr),
                         "ldw.x $dst,$addr",
                         [(set CPURegs:$dst, (sextloadi16 ADDRri:$addr))]>;
+
+
+// LSR - Page 254.
+//    Logically shifts the source operand right, and places the result in the
+//    destination register. The shift amount can be a constant 1 (in the
+//    two-operand version), or an amount given by a second source (in the
+//    three-operand version). If a second source is used, only the bottom
+//    5 bits of the source will be used.
+
+// Single-shift versions.
+defm LSR : SingleOperandOp<"lsr", UnOpFrag<(srl node:$Src, 1)>>;
+
+// Multiple-shift versions.
+// TODO: Model the 5-bit limit somehow?
+defm LSR : ALUOp<"lsr", BinOpFrag<(srl node:$LHS, node:$RHS)>>;
 
 // MOV - Page 262.
 //    The contents of the source are moved into the destination register.
