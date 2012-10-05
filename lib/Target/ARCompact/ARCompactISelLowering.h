@@ -89,6 +89,7 @@ namespace llvm {
         DebugLoc dl, SelectionDAG &DAG,
         SmallVectorImpl<SDValue> &InVals) const;
 
+    SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerBR_CC(SDValue Op, SelectionDAG &DAG) const;
 
     virtual EVT getSetCCResultType(EVT VT) const;

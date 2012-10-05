@@ -42,6 +42,9 @@ ARCompactTargetLowering::ARCompactTargetLowering(ARCompactTargetMachine &tm)
   // We do not have division, so mark it as expensive.
   setIntDivIsCheap(false);
 
+  // Global addresses are custom lowered to ARCISD:Wrappers.
+  setOperationAction(ISD::GlobalAddress,  MVT::i32,   Custom);
+
   // BRCOND is expanded to ???, BR_CC is lowered to a CMP and Bcc.
   setOperationAction(ISD::BR_CC,          MVT::i32,   Custom);
   setOperationAction(ISD::BRCOND,         MVT::Other, Expand);
@@ -50,6 +53,7 @@ ARCompactTargetLowering::ARCompactTargetLowering(ARCompactTargetMachine &tm)
 SDValue ARCompactTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG)
     const {
   switch (Op.getOpcode()) {
+    case ISD::GlobalAddress:    return LowerGlobalAddress(Op, DAG);
     case ISD::BR_CC:            return LowerBR_CC(Op, DAG);
     default:
       llvm_unreachable("unimplemented operand");
@@ -424,6 +428,19 @@ static SDValue EmitCMP(SDValue &LHS, SDValue &RHS, SDValue &TargetCC,
 
   TargetCC = DAG.getConstant(TCC, MVT::i32);
   return DAG.getNode(ARCISD::CMP, dl, MVT::Glue, LHS, RHS);
+}
+
+SDValue ARCompactTargetLowering::LowerGlobalAddress(SDValue Op,
+    SelectionDAG &DAG) const {
+  //DEBUG(dbgs() << "ARCompactTargetLowering::LowerGlobalAddress()\n");
+  const GlobalValue *GV = cast<GlobalAddressSDNode>(Op)->getGlobal();
+  int64_t Offset = cast<GlobalAddressSDNode>(Op)->getOffset();
+
+  // Create the TargetGlobalAddress node, folding in the constant offset.
+  SDValue Result = DAG.getTargetGlobalAddress(GV, Op.getDebugLoc(),
+      getPointerTy(), Offset);
+  return DAG.getNode(ARCISD::Wrapper, Op.getDebugLoc(),
+      getPointerTy(), Result);
 }
 
 SDValue ARCompactTargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG)
