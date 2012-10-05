@@ -38,6 +38,9 @@ ARCompactTargetLowering::ARCompactTargetLowering(ARCompactTargetMachine &tm)
 
   // Compute derived properties from the register classes
   computeRegisterProperties();
+
+  // We do not have division, so mark it as expensive.
+  setIntDivIsCheap(false);
 }
 
 SDValue ARCompactTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG)
