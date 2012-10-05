@@ -19,6 +19,7 @@ const char *Triple::getArchTypeName(ArchType Kind) {
   switch (Kind) {
   case UnknownArch: return "unknown";
 
+  case arcompact: return "arcompact";
   case arm:     return "arm";
   case cellspu: return "cellspu";
   case hexagon: return "hexagon";
@@ -150,6 +151,7 @@ const char *Triple::getEnvironmentTypeName(EnvironmentType Kind) {
 
 Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
   return StringSwitch<Triple::ArchType>(Name)
+    .Case("arcompact", arcompact)
     .Case("arm", arm)
     .Case("cellspu", cellspu)
     .Case("mips", mips)
@@ -237,6 +239,7 @@ const char *Triple::getArchNameForAssembler() {
 
 static Triple::ArchType parseArch(StringRef ArchName) {
   return StringSwitch<Triple::ArchType>(ArchName)
+    .Case("arcompact", Triple::arcompact)
     .Cases("i386", "i486", "i586", "i686", Triple::x86)
     // FIXME: Do we need to support these?
     .Cases("i786", "i886", "i986", Triple::x86)
@@ -686,6 +689,7 @@ static unsigned getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
     return 16;
 
   case llvm::Triple::amdil:
+  case llvm::Triple::arcompact:
   case llvm::Triple::arm:
   case llvm::Triple::cellspu:
   case llvm::Triple::hexagon:
@@ -736,6 +740,7 @@ Triple Triple::get32BitArchVariant() const {
 
   case Triple::amdil:
   case Triple::spir:
+  case Triple::arcompact:
   case Triple::arm:
   case Triple::cellspu:
   case Triple::hexagon:
@@ -769,6 +774,7 @@ Triple Triple::get64BitArchVariant() const {
   switch (getArch()) {
   case Triple::UnknownArch:
   case Triple::amdil:
+  case Triple::arcompact:
   case Triple::arm:
   case Triple::cellspu:
   case Triple::hexagon:

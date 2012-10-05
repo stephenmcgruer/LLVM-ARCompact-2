@@ -81,6 +81,7 @@ set(LLVM_ALL_TARGETS
   Mips
   MBlaze
   MSP430
+  ARCompact
   NVPTX
   PowerPC
   Sparc
