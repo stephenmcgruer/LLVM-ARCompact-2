@@ -32,3 +32,25 @@ void ARCompactInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   BuildMI(MBB, I, DL, get(ARC::MOVrr), DestReg)
       .addReg(SrcReg, getKillRegState(KillSrc));
 }
+
+void ARCompactInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
+    MachineBasicBlock::iterator MI, unsigned SrcReg, bool isKill, int FrameIdx,
+    const TargetRegisterClass *RC, const TargetRegisterInfo *TRI) const {
+  DebugLoc DL;
+  if (MI != MBB.end()) DL = MI->getDebugLoc();
+
+  BuildMI(MBB, MI, DL, get(ARC::STrri))
+      .addFrameIndex(FrameIdx).addImm(0)
+      .addReg(SrcReg, getKillRegState(isKill));
+}
+
+void ARCompactInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
+    MachineBasicBlock::iterator MI, unsigned DestReg, int FrameIdx,
+    const TargetRegisterClass *RC, const TargetRegisterInfo *TRI) const {
+  DebugLoc DL;
+  if (MI != MBB.end()) DL = MI->getDebugLoc();
+
+  BuildMI(MBB, MI, DL, get(ARC::LDrli))
+      .addReg(DestReg)
+      .addFrameIndex(FrameIdx).addImm(0);
+}
