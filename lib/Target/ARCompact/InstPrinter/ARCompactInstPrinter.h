@@ -37,6 +37,8 @@ namespace llvm {
     void printMemOperand(const MCInst *MI, unsigned OpNo,
         raw_ostream &O);
     void printCCOperand(const MCInst *MI, unsigned OpNo, raw_ostream &O);
+    void printPredicateOperand(const MCInst *MI, unsigned OpNo,
+        raw_ostream &O);
   };
 }
 

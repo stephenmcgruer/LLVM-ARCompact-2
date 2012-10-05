@@ -124,3 +124,12 @@ void ARCompactInstPrinter::printCCOperand(const MCInst *MI, unsigned OpNo,
       break;
   }
 }
+
+void ARCompactInstPrinter::printPredicateOperand(const MCInst *MI,
+    unsigned OpNo, raw_ostream &O) {
+  ARCCC::CondCodes CC = (ARCCC::CondCodes) MI->getOperand(OpNo).getImm();
+  // AL is the default, do not print it.
+  if (CC != ARCCC::COND_AL) {
+    O << "." << ARCCCToString(CC);
+  }
+}
