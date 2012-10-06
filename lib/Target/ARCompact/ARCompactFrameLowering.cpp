@@ -1,4 +1,4 @@
-//===-- ARCompactFrameLowering.cpp - ARCompact Frame Information ----------------===//
+//====----- ARCompactFrameLowering.cpp - ARCompact Frame Information -----====//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,12 +14,22 @@
 #include "ARCompactFrameLowering.h"
 #include "ARCompactInstrInfo.h"
 #include "ARCompactMachineFunctionInfo.h"
-
+#include "llvm/Function.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
-#include "llvm/LLVMContext.h"
+#include "llvm/CodeGen/MachineModuleInfo.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/Target/TargetData.h"
+#include "llvm/Target/TargetOptions.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Metadata.h"
+#include "llvm/LLVMContext.h"
+#include "llvm/ADT/ArrayRef.h"
+
+#include "llvm/Support/Debug.h"
+
+#include <string>
 
 using namespace llvm;
 
@@ -75,7 +85,6 @@ using namespace llvm;
  *   low                                   |                       |
  *   mem                               SP  +-----------------------+
  */
-
 
 void ARCompactFrameLowering::emitPrologue(MachineFunction &MF) const {
   MachineBasicBlock &MBB = MF.front();

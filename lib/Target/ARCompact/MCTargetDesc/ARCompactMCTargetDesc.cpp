@@ -1,4 +1,4 @@
-//===-- ARCompactMCTargetDesc.cpp - ARCompact Target Descriptions ---------------===//
+//===----- ARCompactMCTargetDesc.cpp - ARCompact Target Descriptions ------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,6 +14,7 @@
 #include "ARCompactMCTargetDesc.h"
 #include "ARCompactMCAsmInfo.h"
 #include "InstPrinter/ARCompactInstPrinter.h"
+
 #include "llvm/MC/MCCodeGenInfo.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
@@ -43,16 +44,15 @@ static MCRegisterInfo *createARCompactMCRegisterInfo(StringRef TT) {
   return X;
 }
 
-static MCSubtargetInfo *createARCompactMCSubtargetInfo(StringRef TT, StringRef CPU,
-                                                    StringRef FS) {
+static MCSubtargetInfo *createARCompactMCSubtargetInfo(StringRef TT, 
+    StringRef CPU, StringRef FS) {
   MCSubtargetInfo *X = new MCSubtargetInfo();
   InitARCompactMCSubtargetInfo(X, TT, CPU, FS);
   return X;
 }
 
-static MCCodeGenInfo *createARCompactMCCodeGenInfo(StringRef TT, Reloc::Model RM,
-                                                CodeModel::Model CM,
-                                                CodeGenOpt::Level OL) {
+static MCCodeGenInfo *createARCompactMCCodeGenInfo(StringRef TT, 
+    Reloc::Model RM, CodeModel::Model CM, CodeGenOpt::Level OL) {
   MCCodeGenInfo *X = new MCCodeGenInfo();
   X->InitMCCodeGenInfo(RM, CM, OL);
   return X;
@@ -75,19 +75,20 @@ extern "C" void LLVMInitializeARCompactTargetMC() {
 
   // Register the MC codegen info.
   TargetRegistry::RegisterMCCodeGenInfo(TheARCompactTarget,
-                                        createARCompactMCCodeGenInfo);
+      createARCompactMCCodeGenInfo);
 
   // Register the MC instruction info.
-  TargetRegistry::RegisterMCInstrInfo(TheARCompactTarget, createARCompactMCInstrInfo);
+  TargetRegistry::RegisterMCInstrInfo(TheARCompactTarget,
+      createARCompactMCInstrInfo);
 
   // Register the MC register info.
   TargetRegistry::RegisterMCRegInfo(TheARCompactTarget,
-                                    createARCompactMCRegisterInfo);
+      createARCompactMCRegisterInfo);
 
   // Register the MC subtarget info.
   TargetRegistry::RegisterMCSubtargetInfo(TheARCompactTarget,
-                                          createARCompactMCSubtargetInfo);
-
+      createARCompactMCSubtargetInfo);
+  
   // Register the MCInstPrinter.
   TargetRegistry::RegisterMCInstPrinter(TheARCompactTarget,
                                         createARCompactMCInstPrinter);

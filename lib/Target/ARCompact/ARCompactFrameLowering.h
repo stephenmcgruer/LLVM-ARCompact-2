@@ -1,4 +1,4 @@
-//==- ARCompactFrameLowering.h - Define frame lowering for ARCompact --*- C++ -*--==//
+//===--- ARCompactFrameLowering.h - Define frame lowering for ARCompact ---===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef ARCompact_FRAMEINFO_H
-#define ARCompact_FRAMEINFO_H
+#ifndef ARCOMPACT_FRAMEINFO_H
+#define ARCOMPACT_FRAMEINFO_H
 
 #include "ARCompact.h"
 #include "ARCompactSubtarget.h"
@@ -22,19 +22,19 @@ namespace llvm {
   class ARCompactSubtarget;
 
 class ARCompactFrameLowering : public TargetFrameLowering {
-protected:
   const ARCompactSubtarget &STI;
 
   // There are 4 bytes per word in ARCompact
   static const int UNITS_PER_WORD = 4;
 public:
   explicit ARCompactFrameLowering(const ARCompactSubtarget &sti)
-    : TargetFrameLowering(TargetFrameLowering::StackGrowsDown, 4, 0), STI(sti) {
+      : TargetFrameLowering(TargetFrameLowering::StackGrowsDown, 4, 0),
+        STI(sti) {
   }
 
   /// Emit prologue code into a function. According to the ARC convention,
   /// which is almost identical to the ARCompact one, the prologue must:
-  /// 
+  ///
   ///   * Allocate space for register arguments in the case of variadic functions.
   ///   * Save the return address register (BLINK) if required.
   ///   * Save required non-volatile general-purpose registers into the
@@ -46,7 +46,7 @@ public:
 
   /// Emit epilogue code into a function. According to the ARC convention,
   /// which is almost identical to the ARCompact one, the epilogue must:
-  /// 
+  ///
   ///   * Restore the stack pointer (SP) to the beginning of the saved register
   ///     area.
   ///   * Restore all non-volatile registers that were saved in the register
@@ -63,3 +63,4 @@ public:
 } // End llvm namespace
 
 #endif
+

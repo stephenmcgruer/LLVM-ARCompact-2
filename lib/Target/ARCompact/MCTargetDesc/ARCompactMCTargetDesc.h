@@ -1,4 +1,4 @@
-//===-- ARCompactMCTargetDesc.h - ARCompact Target Descriptions -------*- C++ -*-===//
+//===------ ARCompactMCTargetDesc.h - ARCompact Target Descriptions -------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef ARCompactMCTARGETDESC_H
-#define ARCompactMCTARGETDESC_H
+#ifndef ARCOMPACTMCTARGETDESC_H
+#define ARCOMPACTMCTARGETDESC_H
 
 namespace llvm {
 class Target;
@@ -21,8 +21,8 @@ extern Target TheARCompactTarget;
 
 } // End llvm namespace
 
-// Defines symbolic names for ARCompact registers.
-// This defines a mapping from register name to register number.
+// Defines symbolic names for ARCompact registers.  This defines a mapping from
+// register name to register number.
 #define GET_REGINFO_ENUM
 #include "ARCompactGenRegisterInfo.inc"
 

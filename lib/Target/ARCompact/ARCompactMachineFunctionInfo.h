@@ -1,9 +1,6 @@
-//===- ARCompactMachineFuctionInfo.h - ARCompact machine function info -*- C++ -*-==//
+//===--- ARCompactMachineFuctionInfo.h - ARCompact machine function info --===//
 //
 //                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -11,15 +8,19 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef ARCompactMACHINEFUNCTIONINFO_H
-#define ARCompactMACHINEFUNCTIONINFO_H
+#ifndef ARCCOMPACTMACHINEFUNCTIONINFO_H
+#define ARCCOMPACTMACHINEFUNCTIONINFO_H
 
+#include "ARCompactSubtarget.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/Target/TargetRegisterInfo.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/ADT/BitVector.h"
 
 namespace llvm {
 
-/// ARCompactMachineFunctionInfo - This class is derived from MachineFunction and
-/// contains private ARCompact target-specific information for each MachineFunction.
+/// ARCompactMachineFunctionInfo - This class is derived from MachineFunctionInfo and
+/// contains private ARCompact-specific information for each MachineFunction.
 class ARCompactMachineFunctionInfo : public MachineFunctionInfo {
   virtual void anchor();
 
@@ -46,7 +47,6 @@ public:
   int getVarArgsFrameIndex() const { return VarArgsFrameIndex; }
   void setVarArgsFrameIndex(int Index) { VarArgsFrameIndex = Index; }
 };
-
 } // End llvm namespace
 
-#endif
+#endif // ARCOMPACTMACHINEFUNCTIONINFO_H

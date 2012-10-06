@@ -1,4 +1,4 @@
-//===-- ARCompactRegisterInfo.cpp - ARCompact Register Information --------===//
+//===----- ARCompactRegisterInfo.cpp - ARCOMPACT Register Information -----===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,21 +7,22 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file contains the ARCompact implementation of the TargetRegisterInfo class.
+// This file contains the ARCOMPACT implementation of the TargetRegisterInfo
+// class.
 //
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "arcompact-reg-info"
-
-#include "ARCompactRegisterInfo.h"
 #include "ARCompact.h"
-#include "ARCompactMachineFunctionInfo.h"
-#include "ARCompactTargetMachine.h"
-
-#include "llvm/CodeGen/MachineFrameInfo.h"
+#include "ARCompactRegisterInfo.h"
+#include "ARCompactSubtarget.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineFunction.h"
-#include "llvm/Target/TargetMachine.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Target/TargetInstrInfo.h"
+#include "llvm/Type.h"
 #include "llvm/ADT/BitVector.h"
+#include "llvm/ADT/STLExtras.h"
 
 #define GET_REGINFO_TARGET_DESC
 #include "ARCompactGenRegisterInfo.inc"
@@ -43,7 +44,7 @@ static bool IsStore(MachineInstr &MI) {
 }
 
 ARCompactRegisterInfo::ARCompactRegisterInfo(ARCompactTargetMachine &tm,
-                                       const TargetInstrInfo &tii)
+                                     const TargetInstrInfo &tii)
     : ARCompactGenRegisterInfo(ARC::BLINK), TM(tm), TII(tii) {
 }
 
@@ -51,19 +52,20 @@ const uint16_t* ARCompactRegisterInfo::getCalleeSavedRegs(
     const MachineFunction *MF) const {
   // Taken from page 12 of the ARC GCC calling convention. Not sure
   // if it extends to ARCompact.
-  static const uint16_t CalleeSavedRegs[] = { 
+  static const uint16_t CalleeSavedRegs[] = {
     ARC::T5, ARC::T6, ARC::T7, ARC::S0, ARC::S1, ARC::S2, ARC::S3,
     ARC::S4, ARC::S5, ARC::S6, ARC::S7, ARC::S8, ARC::S9, 0
-  };  
+  };
   return CalleeSavedRegs;
 }
 
-BitVector ARCompactRegisterInfo::getReservedRegs(const MachineFunction &MF) 
+BitVector ARCompactRegisterInfo::getReservedRegs(const MachineFunction &MF)
     const {
   BitVector Reserved(getNumRegs());
 
   // The global pointer, stack pointer, frame pointer, blink and interrupt
   // link registers are reserved.
+  // TODO: If not needed, the frame pointer isnt actually reserved.
   Reserved.set(ARC::GP);
   Reserved.set(ARC::SP);
   Reserved.set(ARC::FP);

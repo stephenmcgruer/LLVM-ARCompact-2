@@ -1,4 +1,4 @@
-//===-- ARCompactISelLowering.h - ARCompact DAG Lowering Interface ----*- C++ -*-===//
+//===----- ARCompactISelLowering.h - ARCompact DAG Lowering Interface -----===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,20 +7,18 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file defines the interfaces that ARCompact uses to lower LLVM code into a
-// selection DAG.
+// This file defines the interfaces that ARCompact uses to lower LLVM code into
+// a selection DAG.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_TARGET_ARCompact_ISELLOWERING_H
-#define LLVM_TARGET_ARCompact_ISELLOWERING_H
+#ifndef ARCOMPACT_ISELLOWERING_H
+#define ARCOMPACT_ISELLOWERING_H
 
-#include "ARCompact.h"
-#include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/Target/TargetLowering.h"
+#include "ARCompact.h"
 
 namespace llvm {
-
   namespace ARCISD {
     enum {
       // Start at the end of the built-in ops.
@@ -48,14 +46,16 @@ namespace llvm {
       /// and TargetGlobalAddress.
       Wrapper,
 
-      // Return with a flag.
+      // Return with a flag operand.
       RET_FLAG
     };
   } // end namespace ARCISD
 
   class ARCompactTargetLowering : public TargetLowering {
   public:
-    explicit ARCompactTargetLowering(ARCompactTargetMachine &TM);
+    ARCompactTargetLowering(ARCompactTargetMachine &TM);
+
+    virtual const char *getTargetNodeName(unsigned Opcode) const;
 
     /// LowerOperation - Provide custom lowering hooks for some operations.
     virtual SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const;
@@ -83,8 +83,12 @@ namespace llvm {
     /// described by the Ins array. The implementation should fill in the
     /// InVals array with legal-type return values from the call, and return
     /// the resulting token chain value.
-    virtual SDValue LowerCall(TargetLowering::CallLoweringInfo &CLI,
-        SmallVectorImpl<SDValue> &InVals) const;
+    virtual SDValue LowerCall(SDValue Chain, SDValue Callee,
+        CallingConv::ID CallConv, bool isVarArg, bool &isTailCall,
+        const SmallVectorImpl<ISD::OutputArg> &Outs,
+        const SmallVectorImpl<SDValue> &OutVals,
+        const SmallVectorImpl<ISD::InputArg> &Ins,
+        DebugLoc dl, SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const;
 
     /// LowerCallResult - Lower the result values of an ISD::CALL into the
     /// appropriate copies out of appropriate physical registers.
@@ -94,15 +98,23 @@ namespace llvm {
         DebugLoc dl, SelectionDAG &DAG,
         SmallVectorImpl<SDValue> &InVals) const;
 
-    SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
+    virtual EVT getSetCCResultType(EVT VT) const;
+
     SDValue LowerBR_CC(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const;
-    
+    SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
+
     MachineBasicBlock* EmitInstrWithCustomInserter(MachineInstr *MI,
         MachineBasicBlock *BB) const;
 
-    virtual EVT getSetCCResultType(EVT VT) const;
-  };
-} // namespace llvm
+    /// Combines DAG nodes before (after?) lowering. Return semantics:
+    ///     SDValue.Val == 0 if no change was made.
+    ///     SDValue.Val == N if N was replaced, is dead, & is already handled.
+    ///     Otherwise if N should be replaced by the returned Operand.
+    virtual SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
-#endif // LLVM_TARGET_ARCompact_ISELLOWERING_H
+  };
+} // end namespace llvm
+
+#endif    // ARCOMPACT_ISELLOWERING_H

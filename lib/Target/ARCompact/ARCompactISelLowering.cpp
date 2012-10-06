@@ -1,4 +1,4 @@
-//===- ARCompactISelLowering.cpp - ARCompact DAG Lowering Implementation  -===//
+//===-- ARCompactISelLowering.cpp - ARCompact DAG Lowering Implementation -===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,40 +7,40 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file implements the ARCompactTargetLowering class.
+// This file implements the interfaces that ARCompact uses to lower LLVM code
+// into a selection DAG.
 //
 //===----------------------------------------------------------------------===//
-
-#define DEBUG_TYPE "arcompact-lower"
 
 #include "ARCompactISelLowering.h"
 #include "ARCompactMachineFunctionInfo.h"
 #include "ARCompactTargetMachine.h"
-
+#include "llvm/DerivedTypes.h"
+#include "llvm/Function.h"
+#include "llvm/Module.h"
 #include "llvm/CodeGen/CallingConvLower.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
+#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
-
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/ErrorHandling.h"
 using namespace llvm;
 
 #include "ARCompactGenCallingConv.inc"
 
-// TODO: Can we pull these from somewhere central?
-static const uint16_t ArgumentRegisters[] = {
-  ARC::R0, ARC::R1, ARC::R2, ARC::R3,
-  ARC::R4, ARC::R5, ARC::R6, ARC::R7
-};
-
 ARCompactTargetLowering::ARCompactTargetLowering(ARCompactTargetMachine &tm)
     : TargetLowering(tm, new TargetLoweringObjectFileELF()) {
+  //DEBUG(dbgs() << "ARCompactTargetLowering::ARCompactTargetLowering()\n");
   // Set up the register classes.
   addRegisterClass(MVT::i32, &ARC::CPURegsRegClass);
 
-  // Compute derived properties from the register classes
+  // Compute the derived properties from the register classes.
   computeRegisterProperties();
 
-  // We do not have division, so mark it as expensive.
+  // Do not have division, so int-division is expensive.
   setIntDivIsCheap(false);
 
   // We don't have 1-bit extension (i.e. for bools).
@@ -82,33 +82,86 @@ ARCompactTargetLowering::ARCompactTargetLowering(ARCompactTargetMachine &tm)
 
   // UDIVREM
   setOperationAction(ISD::UDIVREM,        MVT::i32,   Expand);
+
+  // Variadic function-related stuff.
+  setOperationAction(ISD::VASTART,        MVT::Other, Custom);
+  setOperationAction(ISD::VAARG,          MVT::Other, Expand);
+  setOperationAction(ISD::VACOPY,         MVT::Other, Expand);
+  setOperationAction(ISD::VAEND,          MVT::Other, Expand);
+
+  setOperationAction(ISD::UREM,           MVT::i32,   Expand);
+
+  setOperationAction(ISD::ROTL,           MVT::i32,   Expand);
+  setOperationAction(ISD::ROTR,           MVT::i32,   Expand);
+
+  setOperationAction(ISD::UMUL_LOHI,      MVT::i32,   Expand);
+
+  setOperationAction(ISD::BSWAP,          MVT::i32,   Expand);
+}
+
+const char* ARCompactTargetLowering::getTargetNodeName(unsigned Opcode) const {
+  //DEBUG(dbgs() << "ARCompactTargetLowering::getTargetNodeName()\n");
+  switch (Opcode) {
+    case ARCISD::CALL:        return "ARCISD::CALL";
+    case ARCISD::CMP:         return "ARCISD::CMP";
+    case ARCISD::BR_CC:       return "ARCISD::BR_CC";
+    case ARCISD::SELECT_CC:   return "ARCISD::SELECT_CC";
+    case ARCISD::Wrapper:     return "ARCISD::Wrapper";
+    case ARCISD::RET_FLAG:    return "ARCISD::RET_FLAG";
+    default:                  return 0;
+  }
 }
 
 SDValue ARCompactTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG)
     const {
+  //DEBUG(dbgs() << "ARCompactTargetLowering::LowerOperation()\n");
   switch (Op.getOpcode()) {
     case ISD::GlobalAddress:    return LowerGlobalAddress(Op, DAG);
     case ISD::BR_CC:            return LowerBR_CC(Op, DAG);
     case ISD::SELECT_CC:        return LowerSELECT_CC(Op, DAG);
-    default:
-      llvm_unreachable("unimplemented operand");
+    case ISD::VASTART:          return LowerVASTART(Op, DAG);
+      default:
+      assert(0 && "Unimplemented operation!");
+      return SDValue();
   }
 }
+
+SDValue ARCompactTargetLowering::LowerVASTART(SDValue Op, SelectionDAG &DAG) const {
+  MachineFunction &MF = DAG.getMachineFunction();
+  ARCompactMachineFunctionInfo *FuncInfo = MF.getInfo<ARCompactMachineFunctionInfo>();
+
+  // vastart just stores the address of the VarArgsFrameIndex slot into the
+  // memory location argument.
+  DebugLoc dl = Op.getDebugLoc();
+  EVT PtrVT = DAG.getTargetLoweringInfo().getPointerTy();
+  SDValue FR = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(), PtrVT);
+  const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
+  return DAG.getStore(Op.getOperand(0), dl, FR, Op.getOperand(1),
+                      MachinePointerInfo(SV), false, false, 0);
+}
+
+
+static const uint16_t ArgumentRegisters[] = {
+  ARC::R0, ARC::R1, ARC::R2, ARC::R3,
+  ARC::R4, ARC::R5, ARC::R6, ARC::R7
+};
 
 SDValue ARCompactTargetLowering::LowerFormalArguments(SDValue Chain,
     CallingConv::ID CallConv, bool isVarArg,
     const SmallVectorImpl<ISD::InputArg> &Ins, DebugLoc dl, SelectionDAG &DAG,
     SmallVectorImpl<SDValue> &InVals) const {
+  //DEBUG(dbgs() << "ARCompactTargetLowering::LowerFormalArguments()\n");
+  //DEBUG(dbgs() << "isVarArg? " << isVarArg << "\n");
+  //DEBUG(Chain.getNode()->dump());
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo *MFI = MF.getFrameInfo();
-  ARCompactMachineFunctionInfo *AFI =
-      MF.getInfo<ARCompactMachineFunctionInfo>();
+  ARCompactMachineFunctionInfo *AFI = MF.getInfo<ARCompactMachineFunctionInfo>();
 
   // Assign locations to all of the incoming arguments.
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(CallConv, isVarArg, DAG.getMachineFunction(),
-      getTargetMachine(), ArgLocs, *DAG.getContext());
-  CCInfo.AnalyzeFormalArguments(Ins, CC_ARCompact);
+     getTargetMachine(), ArgLocs, *DAG.getContext());
+  CCInfo.AnalyzeFormalArguments(Ins, CC_ARCompact32);
 
   // Push the arguments onto the InVals vector.
   SDValue ArgValue;
@@ -141,38 +194,42 @@ SDValue ARCompactTargetLowering::LowerFormalArguments(SDValue Chain,
       // parameter.
       SDValue FIN = DAG.getFrameIndex(FI, MVT::i32);
       InVals.push_back(DAG.getLoad(VA.getLocVT(), dl, Chain, FIN,
-            MachinePointerInfo::getFixedStack(FI),
-            false, false, false, 0));
+                                   MachinePointerInfo::getFixedStack(FI),
+                                   false, false, false, 0));
     }
   }
 
+  // varargs
   if (isVarArg) {
     // For this, we need to declare any varargs that can fit into the unused
-    // parameter registers (register r0-r7.) This involves updating the
-    // ARCompactMachineFunctionInfo with the size of the space needed
-    // (num_regs * 4), and sticking the values into the registers. The
-    // remaining varargs are the problem of the caller to deal with.
-
+    // parameter registers (register r0-r7.) This involves updating the 
+    // ARCompactMachineFunctionInfo with the size of the space needed (num_regs * 4),
+    // and sticking the values into the registers. The remaining varargs are
+    // the problem of the caller to deal with.
+    
     // Work out how many varargs we can fit into registers.
     unsigned FirstFreeIndex = CCInfo.getFirstUnallocated(ArgumentRegisters,
         sizeof(ArgumentRegisters) / sizeof(ArgumentRegisters[0]));
-    unsigned NumFreeRegisters = (FirstFreeIndex <= 7) ?
+    unsigned NumFreeRegisters = (FirstFreeIndex <= 7) ? 
         (8 - FirstFreeIndex) : 0;
+    //dbgs() << "NumFreeRegisters: " << NumFreeRegisters << "\n";
 
     // We must make sure to preserve the alignment.
     unsigned Align = MF.getTarget().getFrameLowering()->getStackAlignment();
     unsigned VARegSize = NumFreeRegisters * 4;
     unsigned VARegSaveSize = (VARegSize + Align - 1) & ~(Align - 1);
+    //dbgs() << "VARegSize: " << VARegSize << "\n";
+    //dbgs() << "VARegSaveSize: " << VARegSaveSize << "\n";
 
-    // Update the ARCompactMachineFunctionInfo with the details about the
-    // varargs.
+    // Update the ARCompactMachineFunctionInfo with the details about the varargs.
     AFI->setVarArgsRegSaveSize(VARegSaveSize);
     int64_t offset = CCInfo.getNextStackOffset() + VARegSaveSize - VARegSize;
     // Adjust the offset for the fact that the save locations starts at least 8
     // above the FP, not at the FP.
     offset += 8;
+    //dbgs() << "offset: " << offset << "\n";
     AFI->setVarArgsFrameIndex(MFI->CreateFixedObject(VARegSaveSize,
-          offset, false));
+        offset, false));
 
     // Create a frame index for the varargs area.
     SDValue FIN = DAG.getFrameIndex(AFI->getVarArgsFrameIndex(),
@@ -184,7 +241,7 @@ SDValue ARCompactTargetLowering::LowerFormalArguments(SDValue Chain,
       TargetRegisterClass RC = ARC::CPURegsRegClass;
       unsigned VReg = MF.addLiveIn(ArgumentRegisters[FirstFreeIndex], &RC);
       SDValue Val = DAG.getCopyFromReg(Chain, dl, VReg, MVT::i32);
-      SDValue Store = DAG.getStore(Val.getValue(1), dl, Val, FIN,
+      SDValue Store = DAG.getStore(Val.getValue(1), dl, Val, FIN, 
           MachinePointerInfo::getFixedStack(AFI->getVarArgsFrameIndex()),
           false, false, 0);
       MemOps.push_back(Store);
@@ -199,7 +256,7 @@ SDValue ARCompactTargetLowering::LowerFormalArguments(SDValue Chain,
           &MemOps[0], MemOps.size());
     }
   }
-
+ 
   return Chain;
 }
 
@@ -208,6 +265,7 @@ SDValue ARCompactTargetLowering::LowerReturn(SDValue Chain,
     const SmallVectorImpl<ISD::OutputArg> &Outs,
     const SmallVectorImpl<SDValue> &OutVals, DebugLoc dl, SelectionDAG &DAG)
     const {
+  //DEBUG(dbgs() << "ARCompactTargetLowering::LowerReturn()\n");
   MachineFunction &MF = DAG.getMachineFunction();
 
   // CCValAssign - represent the assignment of the return value to locations.
@@ -215,10 +273,10 @@ SDValue ARCompactTargetLowering::LowerReturn(SDValue Chain,
 
   // CCState - Info about the registers and stack slot.
   CCState CCInfo(CallConv, isVarArg, DAG.getMachineFunction(),
-      DAG.getTarget(), RVLocs, *DAG.getContext());
+     DAG.getTarget(), RVLocs, *DAG.getContext());
 
   // Analize return values.
-  CCInfo.AnalyzeReturn(Outs, RetCC_ARCompact);
+  CCInfo.AnalyzeReturn(Outs, RetCC_ARCompact32);
 
   // If this is the first return lowered for this function, add the regs to the
   // liveout set for the function.
@@ -228,6 +286,7 @@ SDValue ARCompactTargetLowering::LowerReturn(SDValue Chain,
         MF.getRegInfo().addLiveOut(RVLocs[i].getLocReg());
       }
   }
+
   SDValue Flag;
 
   // Copy the result values into the output registers.
@@ -254,19 +313,15 @@ SDValue ARCompactTargetLowering::LowerReturn(SDValue Chain,
       RetAddrOffsetNode);
 }
 
-SDValue ARCompactTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
-    SmallVectorImpl<SDValue> &InVals) const {
-  SelectionDAG &DAG                     = CLI.DAG;
-  DebugLoc &dl                          = CLI.DL;
-  SmallVector<ISD::OutputArg, 32> &Outs = CLI.Outs;
-  SmallVector<SDValue, 32> &OutVals     = CLI.OutVals;
-  SmallVector<ISD::InputArg, 32> &Ins   = CLI.Ins;
-  SDValue Chain                         = CLI.Chain;
-  SDValue Callee                        = CLI.Callee;
-  bool &isTailCall                      = CLI.IsTailCall;
-  CallingConv::ID CallConv              = CLI.CallConv;
-  bool isVarArg                         = CLI.IsVarArg;
-
+SDValue ARCompactTargetLowering::LowerCall(SDValue Chain, SDValue Callee,
+    CallingConv::ID CallConv, bool isVarArg, bool &isTailCall,
+    const SmallVectorImpl<ISD::OutputArg> &Outs,
+    const SmallVectorImpl<SDValue> &OutVals,
+    const SmallVectorImpl<ISD::InputArg> &Ins,
+    DebugLoc dl, SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
+  //DEBUG(dbgs() << "ARCompactTargetLowering::LowerCall()\n");
+  //DEBUG(Chain.getNode()->dump());
+  //DEBUG(dbgs() << "isVarArg? " << isVarArg << "\n");
   // ARCompact does not support tail calls yet.
   isTailCall = false;
 
@@ -275,7 +330,7 @@ SDValue ARCompactTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI
   CCState CCInfo(CallConv, isVarArg, DAG.getMachineFunction(),
       getTargetMachine(), ArgLocs, *DAG.getContext());
 
-  CCInfo.AnalyzeCallOperands(Outs, CC_ARCompact);
+  CCInfo.AnalyzeCallOperands(Outs, CC_ARCompact32);
 
   // Get a count of how many bytes are to be pushed on the stack.
   unsigned NumBytes = CCInfo.getNextStackOffset();
@@ -292,10 +347,12 @@ SDValue ARCompactTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI
     CCValAssign &VA = ArgLocs[i];
 
     SDValue Arg = OutVals[i];
+    //DEBUG(Arg.getNode()->dump());
 
     // Promote the value if needed.
     switch (VA.getLocInfo()) {
       case CCValAssign::Full:
+        //DEBUG(dbgs() << "Full.\n");
         break;
       case CCValAssign::SExt:
         Arg = DAG.getNode(ISD::SIGN_EXTEND, dl, VA.getLocVT(), Arg);
@@ -313,8 +370,10 @@ SDValue ARCompactTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI
     // Arguments that can be passed in a register must be kept in the
     // RegsToPass vector.
     if (VA.isRegLoc()) {
+      //DEBUG(dbgs() << "RegLoc!\n");
       RegsToPass.push_back(std::make_pair(VA.getLocReg(), Arg));
     } else {
+      //DEBUG(dbgs() << "Else!\n");
       // Sanity check.
       assert(VA.isMemLoc());
       //llvm_unreachable("Mem");
@@ -395,12 +454,13 @@ SDValue ARCompactTargetLowering::LowerCallResult(SDValue Chain, SDValue InFlag,
     const SmallVectorImpl<ISD::InputArg> &Ins,
     DebugLoc dl, SelectionDAG &DAG,
     SmallVectorImpl<SDValue> &InVals) const {
+  //DEBUG(dbgs() << "ARCompactTargetLowering::LowerCallResult()\n");
   // Assign locations to each value returned by this call.
   SmallVector<CCValAssign, 16> RVLocs;
   CCState CCInfo(CallConv, isVarArg,
       DAG.getMachineFunction(), getTargetMachine(), RVLocs, *DAG.getContext());
 
-  CCInfo.AnalyzeCallResult(Ins, RetCC_ARCompact);
+  CCInfo.AnalyzeCallResult(Ins, RetCC_ARCompact32);
 
   // Copy all of the result registers out of their specified physreg.
   for (unsigned i = 0; i != RVLocs.size(); ++i) {
@@ -411,6 +471,11 @@ SDValue ARCompactTargetLowering::LowerCallResult(SDValue Chain, SDValue InFlag,
   }
 
   return Chain;
+}
+
+EVT ARCompactTargetLowering::getSetCCResultType(EVT VT) const {
+  //DEBUG(dbgs() << "ARCompactTargetLowering::getSetCCResultType()\n");
+  return MVT::i32;
 }
 
 // Emits and returns an ARCompact compare instruction for the given
@@ -465,18 +530,6 @@ static SDValue EmitCMP(SDValue &LHS, SDValue &RHS, SDValue &TargetCC,
   return DAG.getNode(ARCISD::CMP, dl, MVT::Glue, LHS, RHS);
 }
 
-SDValue ARCompactTargetLowering::LowerGlobalAddress(SDValue Op,
-    SelectionDAG &DAG) const {
-  //DEBUG(dbgs() << "ARCompactTargetLowering::LowerGlobalAddress()\n");
-  const GlobalValue *GV = cast<GlobalAddressSDNode>(Op)->getGlobal();
-  int64_t Offset = cast<GlobalAddressSDNode>(Op)->getOffset();
-
-  // Create the TargetGlobalAddress node, folding in the constant offset.
-  SDValue Result = DAG.getTargetGlobalAddress(GV, Op.getDebugLoc(),
-      getPointerTy(), Offset);
-  return DAG.getNode(ARCISD::Wrapper, Op.getDebugLoc(),
-      getPointerTy(), Result);
-}
 
 SDValue ARCompactTargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG)
     const {
@@ -525,6 +578,19 @@ SDValue ARCompactTargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG)
   // Lower it to an ARCISD::SELECT_CC, which EmitInstrWithCustomInserter
   // will take care of.
   return DAG.getNode(ARCISD::SELECT_CC, dl, VTs, &Ops[0], Ops.size());
+}
+
+SDValue ARCompactTargetLowering::LowerGlobalAddress(SDValue Op,
+    SelectionDAG &DAG) const {
+  //DEBUG(dbgs() << "ARCompactTargetLowering::LowerGlobalAddress()\n");
+  const GlobalValue *GV = cast<GlobalAddressSDNode>(Op)->getGlobal();
+  int64_t Offset = cast<GlobalAddressSDNode>(Op)->getOffset();
+
+  // Create the TargetGlobalAddress node, folding in the constant offset.
+  SDValue Result = DAG.getTargetGlobalAddress(GV, Op.getDebugLoc(),
+      getPointerTy(), Offset);
+  return DAG.getNode(ARCISD::Wrapper, Op.getDebugLoc(),
+      getPointerTy(), Result);
 }
 
 MachineBasicBlock* ARCompactTargetLowering::EmitInstrWithCustomInserter(
@@ -587,6 +653,36 @@ MachineBasicBlock* ARCompactTargetLowering::EmitInstrWithCustomInserter(
   return BB;
 }
 
-EVT ARCompactTargetLowering::getSetCCResultType(EVT VT) const {
-  return MVT::i32;
+#include <iostream>
+/// Do target-specific dag combines on SELECT_CC nodes.
+static SDValue PerformSELECTCCCombine(SDNode *N, SelectionDAG &DAG,
+    TargetLowering::DAGCombinerInfo &DCI) {
+  DebugLoc dl = N->getDebugLoc();
+  SDValue LHS = N->getOperand(0);
+  SDValue RHS = N->getOperand(1);
+  //ISD::CondCode CC = cast<CondCodeSDNode>(N->getOperand(4))->get();
+
+  EVT ValueType = LHS.getValueType();   // LHS and RHS have same VT.
+
+  // Try to form max/min nodes.
+  //N->dump();
+  //std::cerr << std::endl << "CondCode: " << CC << std::endl;
+
+  return SDValue();
+}
+
+SDValue ARCompactTargetLowering::PerformDAGCombine(SDNode *N,
+    DAGCombinerInfo &DCI) const {
+  SelectionDAG &DAG = DCI.DAG;
+  //std::cerr << "PerformDAGCombine" << std::endl;
+  //N->dump();
+  switch (N->getOpcode()) {
+    case ISD::SELECT_CC:
+      //std::cerr << "Select!" << std::endl;
+      return PerformSELECTCCCombine(N, DAG, DCI);
+    default:
+      break;
+  }
+
+  return SDValue();
 }

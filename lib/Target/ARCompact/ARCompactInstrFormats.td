@@ -1,8 +1,8 @@
-//===-- ARCompactInstrFormats.td - ARCompact Instruction Formats -*- tablegen -*-===//
+//===------ ARCompactInstrFormats.td - ARCompact Instruction Formats ------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
-// This file is distributed under the University of Illinois Open Source 
+// This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
@@ -27,15 +27,15 @@ def pred : PredicateOperand<OtherVT, (ops i32imm, i32imm),
 //===----------------------------------------------------------------------===//
 
 // Represents a generic ARCompact instruction.
-class ARCInst<dag outs, dag ins, string asmstr, list<dag> pattern> 
+class ARCInst<dag outs, dag ins, string asmstr, list<dag> pattern>
     : Instruction {
   field bits<32> Inst;
 
   let Namespace = "ARC";
 
   // The top five bits are the major opcode.
-  bits<5> op; 
-  let Inst{31-27} = op; 
+  bits<5> op;
+  let Inst{31-27} = op;
 
   dag OutOperandList = outs;
   dag InOperandList = ins;
@@ -45,7 +45,7 @@ class ARCInst<dag outs, dag ins, string asmstr, list<dag> pattern>
 
 class Pseudo<dag outs, dag ins, string asmstr, list<dag> pattern>
     : ARCInst<outs, ins, asmstr, pattern> {
-  let op = 0;  
+  let op = 0;
 
   let Inst{26-0} = 0;
-} 
+}

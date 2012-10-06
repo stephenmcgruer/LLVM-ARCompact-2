@@ -1,4 +1,4 @@
-//===-- ARCompactSelectionDAGInfo.cpp - ARCompact SelectionDAG Info -------------===//
+//===----- ARCompactSelectionDAGInfo.cpp - ARCompact SelectionDAG Info ----===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -15,9 +15,10 @@
 #include "ARCompactTargetMachine.h"
 using namespace llvm;
 
-ARCompactSelectionDAGInfo::ARCompactSelectionDAGInfo(const ARCompactTargetMachine &TM)
-  : TargetSelectionDAGInfo(TM) {
+ARCompactSelectionDAGInfo::ARCompactSelectionDAGInfo(
+    const ARCompactTargetMachine &TM) : TargetSelectionDAGInfo(TM) {
 }
 
 ARCompactSelectionDAGInfo::~ARCompactSelectionDAGInfo() {
 }
+

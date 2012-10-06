@@ -1,4 +1,4 @@
-//===-- ARCompactSubtarget.cpp - ARCompact Subtarget Information ----------------===//
+//===------ ARCompactSubtarget.cpp - ARCOMPACT Subtarget Information ------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file implements the ARCompact specific subclass of TargetSubtargetInfo.
+// This file implements the ARCOMPACT specific subclass of TargetSubtargetInfo.
 //
 //===----------------------------------------------------------------------===//
 
@@ -22,7 +22,7 @@
 using namespace llvm;
 
 ARCompactSubtarget::ARCompactSubtarget(const std::string &TT,
-    const std::string &CPU, const std::string &FS) 
+    const std::string &CPU, const std::string &FS)
     : ARCompactGenSubtargetInfo(TT, CPU, FS) {
   // Determine default and user specified characteristics
   std::string CPUName = CPU;

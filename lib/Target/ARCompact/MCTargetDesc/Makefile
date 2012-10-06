@@ -1,4 +1,4 @@
-##===- lib/Target/ARCompact/TargetDesc/Makefile ---------------*- Makefile -*-===##
+##===-------------- lib/Target/ARCompact/TargetDesc/Makefile --------------===##
 #
 #                     The LLVM Compiler Infrastructure
 #

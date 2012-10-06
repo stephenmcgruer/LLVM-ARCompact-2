@@ -20,4 +20,3 @@ BUILT_SOURCES = ARCompactGenRegisterInfo.inc ARCompactGenInstrInfo.inc \
 DIRS = InstPrinter TargetInfo MCTargetDesc
 
 include $(LEVEL)/Makefile.common
-

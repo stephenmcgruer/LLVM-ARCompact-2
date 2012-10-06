@@ -1,4 +1,4 @@
-//==------ ARCompactCallingConv.td - Calling Conventions for ARCompact -----==//
+//===------ ARCompactCallingConv.td - Calling Conventions ARCompact -------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,24 +7,26 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This describes the calling conventions for ARCompact architecture.
+// This describes the calling conventions for the ARCompact architectures.
 //
 //===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
-// ARCompact Return Value Calling Convention
+// Return Value Calling Conventions
 //===----------------------------------------------------------------------===//
-def RetCC_ARCompact : CallingConv<[
+
+// 32-bit C return-value convention.
+def RetCC_ARCompact32 : CallingConv<[
+  // TODO: Check if only R0 should be used for return values.
   CCIfType<[i32], CCAssignToReg<[R0]>>
 ]>;
 
-//===----------------------------------------------------------------------===//
-// ARCompact Argument Calling Conventions
-//===----------------------------------------------------------------------===//
-def CC_ARCompact : CallingConv<[
+// 32-bit C Calling convention.
+def CC_ARCompact32 : CallingConv<[
   // The first 8 int-32 arguments get passed in registers R0-R7.
   CCIfType<[i32], CCAssignToReg<[R0, R1, R2, R3, R4, R5, R6, R7]>>,
 
   // Everything else is assigned to the stack in 4-byte aligned units.
-  CCIfType<[i32], CCAssignToStack<4, 4>> 
+  CCIfType<[i32], CCAssignToStack<4, 4>>
 ]>;
+

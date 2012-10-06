@@ -1,4 +1,4 @@
-//===-- ARCompactTargetMachine.cpp - Define TargetMachine for ARCompact ---------===//
+//===--- ARCompactTargetMachine.cpp - Define TargetMachine for ARCompact --===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,16 +7,15 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Top-level implementation for the ARCompact target.
 //
 //===----------------------------------------------------------------------===//
 
-#include "ARCompactTargetMachine.h"
 #include "ARCompact.h"
+#include "ARCompactTargetMachine.h"
 #include "llvm/PassManager.h"
 #include "llvm/CodeGen/Passes.h"
-#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/Support/TargetRegistry.h"
+
 using namespace llvm;
 
 extern "C" void LLVMInitializeARCompactTarget() {

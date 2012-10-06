@@ -1,4 +1,4 @@
-//===-- ARCompactSelectionDAGInfo.h - ARCompact SelectionDAG Info -----*- C++ -*-===//
+//===------ ARCompactSelectionDAGInfo.h - ARCompact SelectionDAG Info -----===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef ARCompactSELECTIONDAGINFO_H
-#define ARCompactSELECTIONDAGINFO_H
+#ifndef ARCOMPACTSELECTIONDAGINFO_H
+#define ARCOMPACTSELECTIONDAGINFO_H
 
 #include "llvm/Target/TargetSelectionDAGInfo.h"
 

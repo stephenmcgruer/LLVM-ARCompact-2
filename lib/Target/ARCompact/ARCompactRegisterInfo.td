@@ -1,8 +1,8 @@
-//===-- ARCompactRegisterInfo.td - ARCompact Register defs -------*- tablegen -*-===//
+//===--------- ARCompactRegisterInfo.td - ARCompact Register defs ---------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
-// This file is distributed under the University of Illinois Open Source 
+// This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
@@ -80,9 +80,3 @@ def CPURegs : RegisterClass<"ARC", [i32], 32, (add
   S0, S1, S2, S3, S4, S5, S6, S7, S8, S9,
   // Reserved
   GP, FP, SP, ILINK1, ILINK2, BLINK)>;
-
-// The condition code register.
-def CCR : RegisterClass<"ARC", [i32], 32, (add STATUS32)> {
-  let CopyCost = -1; // Cannot copy.
-  let isAllocatable = 0; // Cannot allocate to.
-}

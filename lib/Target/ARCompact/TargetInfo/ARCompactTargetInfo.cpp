@@ -1,4 +1,4 @@
-//===-- ARCompactTargetInfo.cpp - ARCompact Target Implementation ---------------===//
+//===------ ARCompactTargetInfo.cpp - ARCompact Target Implementation -----===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,7 +14,7 @@ using namespace llvm;
 
 Target llvm::TheARCompactTarget;
 
-extern "C" void LLVMInitializeARCompactTargetInfo() { 
-  RegisterTarget<Triple::arcompact> 
-    X(TheARCompactTarget, "arcompact", "ARCompact");
+extern "C" void LLVMInitializeARCompactTargetInfo() {
+  RegisterTarget<Triple::arcompact> X(TheARCompactTarget, "arcompact",
+      "ARCompact");
 }

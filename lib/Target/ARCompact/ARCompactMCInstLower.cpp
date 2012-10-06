@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 //
 // This file contains code to lower ARCompact MachineInstrs to their corresponding
-// MCInst records.
+// MCInst records. Largely taken from MSP430.
 //
 //===----------------------------------------------------------------------===//
 
@@ -24,7 +24,6 @@
 #include "llvm/MC/MCExpr.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Target/Mangler.h"
-
 using namespace llvm;
 
 void ARCompactMCInstLower::Lower(const MachineInstr *MI, MCInst &OutMI) const {
@@ -70,7 +69,6 @@ void ARCompactMCInstLower::Lower(const MachineInstr *MI, MCInst &OutMI) const {
     OutMI.addOperand(MCOp);
   }
 }
-
 
 MCSymbol *ARCompactMCInstLower::GetGlobalAddressSymbol(
     const MachineOperand &MO) const {

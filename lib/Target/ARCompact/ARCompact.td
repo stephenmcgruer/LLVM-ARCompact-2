@@ -1,13 +1,14 @@
-//===-- ARCompact.td - Describe the ARCompact Target Machine -----*- tablegen -*-===//
+//===------- ARCompact.td - Describe the ARCompact Target Machine ---------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
-// This file is distributed under the University of Illinois Open Source 
+// This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
 // This is the top level entry point for the ARCompact target.
 //===----------------------------------------------------------------------===//
+
 //===----------------------------------------------------------------------===//
 // Target-independent interfaces.
 //===----------------------------------------------------------------------===//
@@ -25,8 +26,8 @@ include "ARCompactInstrInfo.td"
 def ARCompactInstrInfo : InstrInfo;
 
 def ARCompactInstPrinter : AsmWriter {
-  string AsmWriterClassName = "InstPrinter";
-  bit isMCAsmWriter = 1;
+	string AsmWriterClassName = "InstPrinter";
+	bit isMCAsmWriter = 1;
 }
 
 //===----------------------------------------------------------------------===//

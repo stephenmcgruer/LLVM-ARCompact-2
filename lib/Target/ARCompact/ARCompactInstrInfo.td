@@ -1,8 +1,8 @@
-//===-- ARCompactInstrInfo.td - ARCompact Instruction defs -------*- tablegen -*-===//
+//===--- ARCompactInstrInfo.td - Target Description for ARCompact Target --===//
 //
 //                     The LLVM Compiler Infrastructure
 //
-// This file is distributed under the University of Illinois Open Source 
+// This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
@@ -29,7 +29,6 @@ def SDT_ARCCallSeqEnd   : SDCallSeqEnd<[SDTCisVT<0, i32>, SDTCisVT<1, i32>]>;
 // Wrapper for Global Addresses etc.
 def SDT_ARCWrapper      : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>,
                                                SDTCisPtrTy<0>]>;
-
 // Compare, branch and select.
 def SDT_ARCCmp          : SDTypeProfile<0, 2, [SDTCisSameAs<0, 1>]>;
 def SDT_ARCBrCC         : SDTypeProfile<0, 2, [SDTCisVT<0, OtherVT>,
@@ -136,6 +135,14 @@ def brtarget : Operand<OtherVT>;
 // ARCompact Multi-Classes.
 //===----------------------------------------------------------------------===//
 
+// Captures ARCompact general purpose instructions, which have the following
+// types:
+//
+//   * Register1 = Register2 op Register3
+//   * Register1 = Register2 op Unsigned Immediate
+//   * Register1 = Register1 op Signed Immediate
+//   * Register1 = Register2 op Long Immediate
+//
 multiclass GenPurposeInst<string opstring, SDNode OpNode> {
   // TODO: Only define pred in the case where $dst = $src1
   def rr : Pseudo<(outs CPURegs:$dst),
@@ -299,7 +306,20 @@ let Defs = [STATUS32], Uses = [STATUS32] in {
 //    commutative and so does not allow immediates on the LHS. Instead, this
 //    situation is converted to "add a,b,limm" automatically.
 
+// Should be ALUOp, but ISelDAGToDAG emits an ADDrli, and I cant work out how to
+// make the predicate implicit...
+//defm ADD : ALUOp<"add", BinOpFrag<(add node:$LHS, node:$RHS)>>;
 defm ADD : GenPurposeInst<"add", add>;
+
+
+// Carry-producing add.
+// TODO: Fold into a multi-class.
+let Defs = [STATUS32] in {
+  def ADDrr_f : Pseudo<(outs CPURegs:$dst), (ins CPURegs:$src1, CPURegs:$src2),
+                       "add.f $dst,$src1,$src2",
+                       [(set CPURegs:$dst,
+                            (addc CPURegs:$src1, CPURegs:$src2))]>;
+}
 
 // ADD1 - Page 182
 //    Add the first source operand to the second source operand bit-shifted
@@ -381,6 +401,22 @@ let isBranch = 1, isTerminator = 1 in {
   } // Uses = [STATUS32]
 } // isBranch, isTerminator
 
+// BCLR - Page 210.
+//    Clear a bit in the value given by the first source operand; the position
+//    is given by the value in the second source operand. The result is placed
+//    in the destination register.
+
+// TODO: Not actually an ALUOp, should specify correct class.
+defm BCLR : ALUOp<"bclr", BinOpFrag<(and node:$LHS,
+                                        (not (shl 1, node:$RHS)))>>;
+
+// BIC - Page 211.
+//    Takes the logical bitwise AND of the first source operand with the
+//    inverse (logical NOT) of the second source operand, and places the
+//    result into the destination register.
+
+defm BIC : ALUOp<"bic", BinOpFrag<(and node:$LHS, (not node:$RHS))>>;
+
 // BLcc - Page 212.
 //    When the specified condition code is met (cc = true in the unconditional
 //    case), the program jumps to the given label and the address of the BLcc
@@ -401,11 +437,78 @@ let isCall = 1 in {
                        "bl @$dst",
                        [(ARCcall imm:$dst)]>;
     // Branch and link can't handle a register source. Jump can.
-    //def JLr : Pseudo<(outs), (ins CPURegs:$dst, variable_ops),
-    //                   "jl [$dst]",
-    //                   [(ARCcall CPURegs:$dst)]>;
+    def JLr : Pseudo<(outs), (ins CPURegs:$dst, variable_ops),
+                       "jl [$dst]",
+                       [(ARCcall CPURegs:$dst)]>;
   } // Defs = [STATUS32], Uses = [SP]
 } // isCall
+
+// BMSK - Page 214.
+//    Applies a bitmask made up of logical 1s starting from the LSB up to and
+//    including the position specified by the second source operand to the
+//    value specified in the first source operand. The result is placed in
+//    the destination register.
+
+// TODO: Not actually ALUOp, should specify correct class.
+// TODO: Doesn't seem to match test.
+defm BMSK : ALUOp<"bmsk", BinOpFrag<(and node:$LHS,
+                                        (add (shl 1, (add node:$RHS, 1)), -1))>>;
+
+// BSET - Page 222.
+//    Sets a bit in the value given by the first source operand; the position
+//    is given by the value in the second source operand. The result is placed
+//    in the destination register.
+
+// TODO: Not actually ALUOp, should specify correct class.
+defm BSET : ALUOp<"bset", BinOpFrag<(or node:$LHS, (shl 1, node:$RHS))>>;
+
+// BXOR - Page 224.
+//    Toggles a bit in the value given by the first source operand; the
+//    position is given by the value in the second source operand. The result
+//    is placed in the destination register.
+
+// TODO: Not actually ALUOp, should specify correct class.
+defm BXOR : ALUOp<"bxor", BinOpFrag<(xor node:$LHS, (shl 1, node:$RHS))>>;
+
+// EXTB - Page 230.
+//    Zero extend the byte value in the source operand and write the result
+//    into the destination register.
+//
+//    EXTB is a special case as LLVM turns 'zext $src to i8' into
+//    'and $src, 255'. Therefore, EXTB is properly matched by an
+//    anonymous pattern below.
+def EXTBr : Pseudo<(outs CPURegs:$dst), (ins CPURegs:$src),
+                   "extb $dst,$src",
+                   []>;
+
+def EXTBui : Pseudo<(outs CPURegs:$dst), (ins i32imm:$src),
+                   "extb $dst,$src",
+                   []>;
+
+def EXTBli : Pseudo<(outs CPURegs:$dst), (ins i32imm:$src),
+                   "extb $dst,$src",
+                   []>;
+
+// EXTW - Page 231.
+//    Zero extend the word value in the source operand and write the result
+//    into the destination register.
+//
+//    EXTW is a special case as LLVM turns 'zext $src to i16' into
+//    'and $src, 65535'. Therefore, EXTW is properly matched by an
+//    anonymous pattern below.
+def EXTWr : Pseudo<(outs CPURegs:$dst), (ins CPURegs:$src),
+                   "extw $dst,$src",
+                   []>;
+
+def EXTWui : Pseudo<(outs CPURegs:$dst), (ins i32imm:$src),
+                   "extw $dst,$src",
+                   []>;
+
+
+def EXTWli : Pseudo<(outs CPURegs:$dst), (ins i32imm:$src),
+                   "extw $dst,$src",
+                   []>;
+
 
 // CMP - Page 225.
 //    Performs a comparison by subtracting the second source operand from the
@@ -534,12 +637,41 @@ let isAsCheapAsAMove = 1 in {
                       [(set CPURegs:$dst, limm32:$imm)]>;
 }
 
+// MPY - Page 263.
+//    Performs a signed 32-bit by 32-bit multiply of the source operands
+//    and places the least significant bits of the result in the destination
+//    register.
+// TODO: Support other formats than register, register -> register.
+def MPYrr : Pseudo<(outs CPURegs:$dst), (ins CPURegs:$src1, CPURegs:$src2),
+                    "mpy $dst,$src1,$src2",
+                    [(set CPURegs:$dst, (mul CPURegs:$src1, CPURegs:$src2))]>;
+
+// MPYHU - Page 267.
+//    Performs an unsinged 32-bit by 32-bit multiply of the source operands
+//    and places the most significant bits of the result in the destination
+//    register.
+// TODO: Support other formats than register, register -> register.
+def MPYHUrr : Pseudo<(outs CPURegs:$dst), (ins CPURegs:$src1, CPURegs:$src2),
+                     "mpyhu $dst,$src1,$src2",
+                     [(set CPURegs:$dst, (mulhu CPURegs:$src1, CPURegs:$src2))]>;
+
+// MPYH - Page 265.
+//    Performs a signed 32-bit by 32-bit multiple of the source operands and
+//    places the most significant bits of the result in the destination 
+//    register.
+// TODO: Support other formats than register, register -> register.
+def MPYHrr : Pseudo<(outs CPURegs:$dst), (ins CPURegs:$src1, CPURegs:$src2),
+                    "mpyh $dst,$src1,$src2",
+                    [(set CPURegs:$dst, (mulhs CPURegs:$src1, CPURegs:$src2))]>;
+
 // NEG - page 275.
 //    The source value is subtracted from 0 and the result placed in the
 //    destination register.
 //
 //    NEG only has a register-to-register version.
 
+// Note the enforcement of $src = $dst for <.cc> is done by isPredicable in
+// ARCompactInstrInfo.cpp.
 def NEGrr : Pseudo<(outs CPURegs:$dst), (ins CPURegs:$src, pred:$cc),
                    "neg$cc $dst,$src",
                    [(set CPURegs:$dst, (ineg CPURegs:$src))]>;
@@ -582,7 +714,6 @@ defm SEXB : SingleOperandOp<"sexb", UnOpFrag<(sext_inreg node:$Src, i8)>>;
 
 // TODO: These may not be right. Maybe should use sext?
 defm SEXW : SingleOperandOp<"sexw", UnOpFrag<(sext_inreg node:$Src, i16)>>;
-
 
 // ST - page 310.
 //    Stores the value stored in the source operand in the destination memory
@@ -680,3 +811,21 @@ def : Pat<(add CPURegs:$src1, (ARCWrapper tglobaladdr:$src2)),
 
 // Calls.
 def : Pat<(ARCcall (i32 tglobaladdr:$dst)), (BLi tglobaladdr:$dst)>;
+
+// EXTB is modelled by llvm as 'and $src, 255'.
+// The second two of these definitions are unlikely ever to be seen (LLVM just
+// turns them into constant movs), but they are included for completeness.
+def : Pat<(and CPURegs:$src, 255), (EXTBr CPURegs:$src)>;
+def : Pat<(and uimm6:$src, 255), (EXTBui uimm6:$src)>;
+def : Pat<(and limm32:$src, 255), (EXTBli limm32:$src)>;
+
+// EXTW is modelled by llvm as 'and $src, 65535'.
+// The second two of these definitions are unlikely ever to be seen (LLVM just
+// turns them into constant movs), but they are included for completeness.
+def : Pat<(and CPURegs:$src, 65535), (EXTWr CPURegs:$src)>;
+def : Pat<(and uimm6:$src, 65535), (EXTWui uimm6:$src)>;
+def : Pat<(and limm32:$src, 65535), (EXTWli limm32:$src)>;
+
+// Integer extloads are mapped to to zextloads.
+def : Pat<(i32 (extloadi8 ADDRri:$src)), (LDri_extb ADDRri:$src)>;
+def : Pat<(i32 (extloadi16 ADDRri:$src)), (LDri_extw ADDRri:$src)>;

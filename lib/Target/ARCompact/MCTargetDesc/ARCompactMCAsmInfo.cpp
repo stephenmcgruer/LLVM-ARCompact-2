@@ -1,4 +1,4 @@
-//===-- ARCompactMCAsmInfo.cpp - ARCompact asm properties -----------------------===//
+//===-------- ARCompactMCAsmInfo.cpp - ARCompact asm properties -----------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -17,8 +17,6 @@
 
 using namespace llvm;
 
-void ARCompactMCAsmInfo::anchor() { }
-
 ARCompactMCAsmInfo::ARCompactMCAsmInfo(const Target &T, StringRef TT) {
   UsesELFSectionDirectiveForBSS = true;
   IsLittleEndian = true;
@@ -27,3 +25,5 @@ ARCompactMCAsmInfo::ARCompactMCAsmInfo(const Target &T, StringRef TT) {
   CommentString = ";";
   SupportsDebugInformation = true;
 }
+
+void ARCompactMCAsmInfo::anchor() { }
