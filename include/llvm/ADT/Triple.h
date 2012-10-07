@@ -43,6 +43,7 @@ public:
   enum ArchType {
     UnknownArch,
 
+    arcompact, // ARCompact; arcompact
     arm,     // ARM; arm, armv.*, xscale
     cellspu, // CellSPU: spu, cellspu
     hexagon, // Hexagon: hexagon
