@@ -1,5 +1,8 @@
 # LLVM backend for ARCompact #
 
+Note: Do *NOT* use this branch at the moment. Use release_31_arcompact. This
+branch has issues with seg-faulting that I have been unable to fix.
+
 ARCompact is the ISA used by the
 [EnCore](http://groups.inf.ed.ac.uk/pasta/hw_encore.html) microprocessor
 family. This projects aims to create a working LLVM backend for the EnCore
