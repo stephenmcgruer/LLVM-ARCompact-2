@@ -862,8 +862,7 @@ define void @PR13916.1() {
 ; Ensure that we handle overlapping memcpy intrinsics correctly, especially in
 ; the case where there is a directly identical value for both source and dest.
 ; CHECK: @PR13916.1
-; FIXME: We shouldn't leave this alloca around.
-; CHECK: alloca
+; CHECK-NOT: alloca
 ; CHECK: ret void
 
 entry:
@@ -878,8 +877,7 @@ define void @PR13916.2() {
 ; different pointer value chains, but during rewriting we coalesce them into the
 ; same value.
 ; CHECK: @PR13916.2
-; FIXME: We shouldn't leave this alloca around.
-; CHECK: alloca
+; CHECK-NOT: alloca
 ; CHECK: ret void
 
 entry:
@@ -925,4 +923,48 @@ bb3:
 
 bb4:
   unreachable
+}
+
+define double @PR13969(double %x) {
+; Check that we detect when promotion will un-escape an alloca and iterate to
+; re-try running SROA over that alloca. Without that, the two allocas that are
+; stored into a dead alloca don't get rewritten and promoted.
+; CHECK: @PR13969
+
+entry:
+  %a = alloca double
+  %b = alloca double*
+  %c = alloca double
+; CHECK-NOT: alloca
+
+  store double %x, double* %a
+  store double* %c, double** %b
+  store double* %a, double** %b
+  store double %x, double* %c
+  %ret = load double* %a
+; CHECK-NOT: store
+; CHECK-NOT: load
+
+  ret double %ret
+; CHECK: ret double %x
+}
+
+%PR14034.struct = type { { {} }, i32, %PR14034.list }
+%PR14034.list = type { %PR14034.list*, %PR14034.list* }
+
+define void @PR14034() {
+; This test case tries to form GEPs into the empty leading struct members, and
+; subsequently crashed (under valgrind) before we fixed the PR. The important
+; thing is to handle empty structs gracefully.
+; CHECK: @PR14034
+
+entry:
+  %a = alloca %PR14034.struct
+  %list = getelementptr %PR14034.struct* %a, i32 0, i32 2
+  %prev = getelementptr %PR14034.list* %list, i32 0, i32 1
+  store %PR14034.list* undef, %PR14034.list** %prev
+  %cast0 = bitcast %PR14034.struct* undef to i8*
+  %cast1 = bitcast %PR14034.struct* %a to i8*
+  call void @llvm.memcpy.p0i8.p0i8.i32(i8* %cast0, i8* %cast1, i32 12, i32 0, i1 false)
+  ret void
 }

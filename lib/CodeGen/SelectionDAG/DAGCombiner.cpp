@@ -23,7 +23,7 @@
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/Analysis/AliasAnalysis.h"
-#include "llvm/Target/TargetData.h"
+#include "llvm/DataLayout.h"
 #include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
@@ -5345,7 +5345,7 @@ SDValue DAGCombiner::CombineConsecutiveLoads(SDNode *N, EVT VT) {
       !LD2->isVolatile() &&
       DAG.isConsecutiveLoad(LD2, LD1, LD1VT.getSizeInBits()/8, 1)) {
     unsigned Align = LD1->getAlignment();
-    unsigned NewAlign = TLI.getTargetData()->
+    unsigned NewAlign = TLI.getDataLayout()->
       getABITypeAlignment(VT.getTypeForEVT(*DAG.getContext()));
 
     if (NewAlign <= Align &&
@@ -5414,7 +5414,7 @@ SDValue DAGCombiner::visitBITCAST(SDNode *N) {
       !cast<LoadSDNode>(N0)->isVolatile() &&
       (!LegalOperations || TLI.isOperationLegal(ISD::LOAD, VT))) {
     LoadSDNode *LN0 = cast<LoadSDNode>(N0);
-    unsigned Align = TLI.getTargetData()->
+    unsigned Align = TLI.getDataLayout()->
       getABITypeAlignment(VT.getTypeForEVT(*DAG.getContext()));
     unsigned OrigAlign = LN0->getAlignment();
 
@@ -6714,7 +6714,7 @@ static bool canFoldInAddressingMode(SDNode *N, SDNode *Use,
   } else
     return false;
 
-  TargetLowering::AddrMode AM;
+  AddrMode AM;
   if (N->getOpcode() == ISD::ADD) {
     ConstantSDNode *Offset = dyn_cast<ConstantSDNode>(N->getOperand(1));
     if (Offset)
@@ -7341,7 +7341,7 @@ SDValue DAGCombiner::ReduceLoadOpStoreWidth(SDNode *N) {
 
       unsigned NewAlign = MinAlign(LD->getAlignment(), PtrOff);
       Type *NewVTTy = NewVT.getTypeForEVT(*DAG.getContext());
-      if (NewAlign < TLI.getTargetData()->getABITypeAlignment(NewVTTy))
+      if (NewAlign < TLI.getDataLayout()->getABITypeAlignment(NewVTTy))
         return SDValue();
 
       SDValue NewPtr = DAG.getNode(ISD::ADD, LD->getDebugLoc(),
@@ -7403,7 +7403,7 @@ SDValue DAGCombiner::TransformFPLoadStorePair(SDNode *N) {
     unsigned LDAlign = LD->getAlignment();
     unsigned STAlign = ST->getAlignment();
     Type *IntVTTy = IntVT.getTypeForEVT(*DAG.getContext());
-    unsigned ABIAlign = TLI.getTargetData()->getABITypeAlignment(IntVTTy);
+    unsigned ABIAlign = TLI.getDataLayout()->getABITypeAlignment(IntVTTy);
     if (LDAlign < ABIAlign || STAlign < ABIAlign)
       return SDValue();
 
@@ -7568,34 +7568,48 @@ bool DAGCombiner::MergeConsecutiveStores(StoreSDNode* St) {
 
   // Store the constants into memory as one consecutive store.
   if (!IsLoadSrc) {
-    unsigned LastConst = 0;
     unsigned LastLegalType = 0;
+    unsigned LastLegalVectorType = 0;
+    bool NonZero = false;
     for (unsigned i=0; i<LastConsecutiveStore+1; ++i) {
       StoreSDNode *St  = cast<StoreSDNode>(StoreNodes[i].MemNode);
       SDValue StoredVal = St->getValue();
-      bool IsConst = (isa<ConstantSDNode>(StoredVal) ||
-                      isa<ConstantFPSDNode>(StoredVal));
-      if (!IsConst)
-        break;
 
-      // Mark this index as the largest legal constant.
-      LastConst = i;
+      if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(StoredVal)) {
+        NonZero |= !C->isNullValue();
+      } else if (ConstantFPSDNode *C = dyn_cast<ConstantFPSDNode>(StoredVal)) {
+        NonZero |= !C->getConstantFPValue()->isNullValue();
+      } else {
+        // Non constant.
+        break;
+      }
 
       // Find a legal type for the constant store.
       unsigned StoreBW = (i+1) * ElementSizeBytes * 8;
       EVT StoreTy = EVT::getIntegerVT(*DAG.getContext(), StoreBW);
       if (TLI.isTypeLegal(StoreTy))
         LastLegalType = i+1;
+
+      // Find a legal type for the vector store.
+      EVT Ty = EVT::getVectorVT(*DAG.getContext(), MemVT, i+1);
+      if (TLI.isTypeLegal(Ty))
+        LastLegalVectorType = i + 1;
     }
 
+    // We only use vectors if the constant is known to be zero.
+    if (NonZero)
+      LastLegalVectorType = 0;
+
     // Check if we found a legal integer type to store.
-    if (LastLegalType == 0)
+    if (LastLegalType == 0 && LastLegalVectorType == 0)
       return false;
 
-    // We add a +1 because the LastXXX variables refer to array location
-    // while NumElem holds the size.
-    unsigned NumElem = std::min(LastConsecutiveStore, LastConst) + 1;
-    NumElem = std::min(LastLegalType, NumElem);
+    bool UseVector = LastLegalVectorType > LastLegalType;
+    unsigned NumElem = UseVector ? LastLegalVectorType : LastLegalType;
+
+    // Make sure we have something to merge.
+    if (NumElem < 2)
+      return false;
 
     unsigned EarliestNodeUsed = 0;
     for (unsigned i=0; i < NumElem; ++i) {
@@ -7609,36 +7623,41 @@ bool DAGCombiner::MergeConsecutiveStores(StoreSDNode* St) {
 
     // The earliest Node in the DAG.
     LSBaseSDNode *EarliestOp = StoreNodes[EarliestNodeUsed].MemNode;
-
-    // Make sure we have something to merge.
-    if (NumElem < 2)
-      return false;
-
     DebugLoc DL = StoreNodes[0].MemNode->getDebugLoc();
-    unsigned StoreBW = NumElem * ElementSizeBytes * 8;
-    APInt StoreInt(StoreBW, 0);
 
-    // Construct a single integer constant which is made of the smaller
-    // constant inputs.
-    bool IsLE = TLI.isLittleEndian();
-    for (unsigned i = 0; i < NumElem ; ++i) {
-      unsigned Idx = IsLE ?(NumElem - 1 - i) : i;
-      StoreSDNode *St  = cast<StoreSDNode>(StoreNodes[Idx].MemNode);
-      SDValue Val = St->getValue();
-      StoreInt<<=ElementSizeBytes*8;
-      if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Val)) {
-        StoreInt|=C->getAPIntValue().zext(StoreBW);
-      } else if (ConstantFPSDNode *C = dyn_cast<ConstantFPSDNode>(Val)) {
-        StoreInt|= C->getValueAPF().bitcastToAPInt().zext(StoreBW);
-      } else {
-        assert(false && "Invalid constant element type");
+    SDValue StoredVal;
+    if (UseVector) {
+      // Find a legal type for the vector store.
+      EVT Ty = EVT::getVectorVT(*DAG.getContext(), MemVT, NumElem);
+      assert(TLI.isTypeLegal(Ty) && "Illegal vector store");
+      StoredVal = DAG.getConstant(0, Ty);
+    } else {
+      unsigned StoreBW = NumElem * ElementSizeBytes * 8;
+      APInt StoreInt(StoreBW, 0);
+
+      // Construct a single integer constant which is made of the smaller
+      // constant inputs.
+      bool IsLE = TLI.isLittleEndian();
+      for (unsigned i = 0; i < NumElem ; ++i) {
+        unsigned Idx = IsLE ?(NumElem - 1 - i) : i;
+        StoreSDNode *St  = cast<StoreSDNode>(StoreNodes[Idx].MemNode);
+        SDValue Val = St->getValue();
+        StoreInt<<=ElementSizeBytes*8;
+        if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Val)) {
+          StoreInt|=C->getAPIntValue().zext(StoreBW);
+        } else if (ConstantFPSDNode *C = dyn_cast<ConstantFPSDNode>(Val)) {
+          StoreInt|= C->getValueAPF().bitcastToAPInt().zext(StoreBW);
+        } else {
+          assert(false && "Invalid constant element type");
+        }
       }
+
+      // Create the new Load and Store operations.
+      EVT StoreTy = EVT::getIntegerVT(*DAG.getContext(), StoreBW);
+      StoredVal = DAG.getConstant(StoreInt, StoreTy);
     }
 
-    // Create the new Load and Store operations.
-    EVT StoreTy = EVT::getIntegerVT(*DAG.getContext(), StoreBW);
-    SDValue WideInt = DAG.getConstant(StoreInt, StoreTy);
-    SDValue NewStore = DAG.getStore(EarliestOp->getChain(), DL, WideInt,
+    SDValue NewStore = DAG.getStore(EarliestOp->getChain(), DL, StoredVal,
                                     FirstInChain->getBasePtr(),
                                     FirstInChain->getPointerInfo(),
                                     false, false,
@@ -7837,7 +7856,7 @@ SDValue DAGCombiner::visitSTORE(SDNode *N) {
       ST->isUnindexed()) {
     unsigned OrigAlign = ST->getAlignment();
     EVT SVT = Value.getOperand(0).getValueType();
-    unsigned Align = TLI.getTargetData()->
+    unsigned Align = TLI.getDataLayout()->
       getABITypeAlignment(SVT.getTypeForEVT(*DAG.getContext()));
     if (Align <= OrigAlign &&
         ((!LegalOperations && !ST->isVolatile()) ||
@@ -8027,7 +8046,7 @@ SDValue DAGCombiner::visitSTORE(SDNode *N) {
   }
 
   // Only perform this optimization before the types are legal, because we
-  // don't want to perform this optimization multiple times.
+  // don't want to perform this optimization on every DAGCombine invocation.
   if (!LegalTypes && MergeConsecutiveStores(ST))
     return SDValue(N, 0);
 
@@ -8230,7 +8249,7 @@ SDValue DAGCombiner::visitEXTRACT_VECTOR_ELT(SDNode *N) {
       // Check the resultant load doesn't need a higher alignment than the
       // original load.
       unsigned NewAlign =
-        TLI.getTargetData()
+        TLI.getDataLayout()
             ->getABITypeAlignment(LVT.getTypeForEVT(*DAG.getContext()));
 
       if (NewAlign > Align || !TLI.isOperationLegalOrCustom(ISD::LOAD, LVT))
@@ -9118,7 +9137,7 @@ SDValue DAGCombiner::SimplifySelectCC(DebugLoc DL, SDValue N0, SDValue N1,
           const_cast<ConstantFP*>(TV->getConstantFPValue())
         };
         Type *FPTy = Elts[0]->getType();
-        const TargetData &TD = *TLI.getTargetData();
+        const DataLayout &TD = *TLI.getDataLayout();
 
         // Create a ConstantArray of the two constants.
         Constant *CA = ConstantArray::get(ArrayType::get(FPTy, 2), Elts);
