@@ -248,6 +248,7 @@ multiclass SingleOperandOp<string OpString, PatFrag OpNode>
   def singleop_placeholder : Pseudo<(outs), (ins), "", []>;
 }
 
+
 //===----------------------------------------------------------------------===//
 // ARCompact Instructions.
 //===----------------------------------------------------------------------===//
@@ -267,6 +268,9 @@ let Defs = [SP], Uses = [SP] in {
                                 "#ADJCALLSTACKUP",
                                 [(ARCcallseq_end timm:$amt1, timm:$amt2)]>;
 }
+
+// Used to manually insert comments into the generated assembly.
+def COMMENT : Pseudo<(outs), (ins CPURegs:$fake), "$fake", []>;
 
 // The manual defines the preferred NOP asm as mov 0,0.
 def NOP : Pseudo<(outs), (ins), "mov 0,0", []>;
@@ -432,12 +436,11 @@ let isCall = 1 in {
   let Defs = [R0, R1, R2, R3, R4, R5, R6, R7, T0, T1, T2, T3, T4, STATUS32],
       Uses = [SP] in {
     // Unconditional jump.
-    // TODO: Including the '@' may be a hack...
-    def BLi : Pseudo<(outs), (ins i32imm:$dst, variable_ops),
+    def BLi : Pseudo<(outs), (ins i32imm:$dst),
                        "bl @$dst",
                        [(ARCcall imm:$dst)]>;
     // Branch and link can't handle a register source. Jump can.
-    def JLr : Pseudo<(outs), (ins CPURegs:$dst, variable_ops),
+    def JLr : Pseudo<(outs), (ins CPURegs:$dst),
                        "jl [$dst]",
                        [(ARCcall CPURegs:$dst)]>;
   } // Defs = [STATUS32], Uses = [SP]

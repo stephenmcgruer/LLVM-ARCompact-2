@@ -20,18 +20,18 @@
 #include "ARCompactSelectionDAGInfo.h"
 #include "ARCompactSubtarget.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetData.h"
 #include "llvm/Target/TargetFrameLowering.h"
+#include "llvm/DataLayout.h"
 
 namespace llvm {
 
 class ARCompactTargetMachine : public LLVMTargetMachine {
-  ARCompactSubtarget        Subtarget;
-  const TargetData       DataLayout;
-  ARCompactInstrInfo        InstrInfo;
-  ARCompactTargetLowering   TLInfo;
+  ARCompactSubtarget Subtarget;
+  const DataLayout DL;
+  ARCompactTargetLowering TLInfo;
   ARCompactSelectionDAGInfo TSInfo;
-  ARCompactFrameLowering    FrameLowering;
+  ARCompactInstrInfo InstrInfo;
+  ARCompactFrameLowering FrameLowering;
 public:
   ARCompactTargetMachine(const Target &T, StringRef TT,
                       StringRef CPU, StringRef FS, const TargetOptions &Options,
@@ -56,10 +56,11 @@ public:
   virtual const ARCompactSelectionDAGInfo* getSelectionDAGInfo() const {
     return &TSInfo;
   }
-  virtual const TargetData *getTargetData() const {
-    return &DataLayout;
+  virtual const DataLayout *getDataLayout() const {
+    return &DL;
   }
 
+  // Pass Pipeline Configuration
   virtual TargetPassConfig *createPassConfig(PassManagerBase &PM);
 };
 

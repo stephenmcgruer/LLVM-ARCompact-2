@@ -29,20 +29,6 @@
 
 using namespace llvm;
 
-static bool IsStore(MachineInstr &MI) {
-  // TODO: Set "isStore" variable on such instructions, check for that.
-  switch (MI.getOpcode()) {
-    case ARC::STrri:
-    case ARC::STrli:
-    case ARC::STliri:
-    case ARC::STrri_i8:
-    case ARC::STrri_i16:
-      return true;
-    default:
-      return false;
-  }
-}
-
 ARCompactRegisterInfo::ARCompactRegisterInfo(ARCompactTargetMachine &tm,
                                      const TargetInstrInfo &tii)
     : ARCompactGenRegisterInfo(ARC::BLINK), TM(tm), TII(tii) {
@@ -81,6 +67,20 @@ void ARCompactRegisterInfo::eliminateCallFramePseudoInstr(MachineFunction &MF,
   // Simply discard ADJCALLSTACKDOWN and ADJCALLSTACKUP instructions - the
   // callee takes care of moving the stack.
   MBB.erase(I);
+}
+
+static bool IsStore(MachineInstr &MI) {
+  // TODO: Set "isStore" variable on such instructions, check for that.
+  switch (MI.getOpcode()) {
+    case ARC::STrri:
+    case ARC::STrli:
+    case ARC::STliri:
+    case ARC::STrri_i8:
+    case ARC::STrri_i16:
+      return true;
+    default:
+      return false;
+  }
 }
 
 void ARCompactRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
@@ -123,12 +123,17 @@ void ARCompactRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   }
 }
 
+// Return-Address Register.
+unsigned ARCompactRegisterInfo::getRARegister() const {
+    return ARC::BLINK;
+}
+
 unsigned ARCompactRegisterInfo::getFrameRegister(const MachineFunction &MF)
     const {
   return ARC::FP;
 }
 
-// Return-Address Register.
-unsigned ARCompactRegisterInfo::getRARegister() const {
-    return ARC::BLINK;
+const TargetRegisterClass* ARCompactRegisterInfo::getPointerRegClass(
+    const MachineFunction &MF, unsigned Kind) const {
+  return &ARC::CPURegsRegClass;
 }

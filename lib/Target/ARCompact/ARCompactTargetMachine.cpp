@@ -20,7 +20,8 @@ using namespace llvm;
 
 extern "C" void LLVMInitializeARCompactTarget() {
   // Register the target.
-  RegisterTargetMachine<ARCompactTargetMachine> X(TheARCompactTarget);
+  RegisterTargetMachine<ARCompactTargetMachine>
+      X(TheARCompactTarget);
 }
 
 ARCompactTargetMachine::ARCompactTargetMachine(const Target &T,
@@ -32,10 +33,12 @@ ARCompactTargetMachine::ARCompactTargetMachine(const Target &T,
                                          CodeGenOpt::Level OL)
   : LLVMTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL),
     Subtarget(TT, CPU, FS),
-    // FIXME: Check TargetData string.
-    DataLayout(Subtarget.getDataLayout()),
-    InstrInfo(*this), TLInfo(*this), TSInfo(*this),
-    FrameLowering(Subtarget) { }
+    DL(Subtarget.getDataLayout()),
+    TLInfo(*this),
+    TSInfo(*this),
+    InstrInfo(*this),
+    FrameLowering(Subtarget) {
+}
 
 namespace {
 /// ARCompact Code Generator Pass Configuration Options.

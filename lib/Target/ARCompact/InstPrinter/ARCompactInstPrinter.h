@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef ARCompactINSTPRINTER_H
-#define ARCompactINSTPRINTER_H
+#ifndef ARCOMPACTINSTPRINTER_H
+#define ARCOMPACTINSTPRINTER_H
 
 #include "llvm/MC/MCInstPrinter.h"
 
@@ -21,10 +21,9 @@ namespace llvm {
 
   class ARCompactInstPrinter : public MCInstPrinter {
   public:
-    ARCompactInstPrinter(const MCAsmInfo &MAI,
-                         const MCInstrInfo &MII,
-                         const MCRegisterInfo &MRI)
-        : MCInstPrinter(MAI, MII, MRI) {}
+    ARCompactInstPrinter(const MCAsmInfo &MAI, const MCInstrInfo &MII,
+                      const MCRegisterInfo &MRI)
+      : MCInstPrinter(MAI, MII, MRI) {}
 
     virtual void printInst(const MCInst *MI, raw_ostream &O, StringRef Annot);
 
@@ -39,6 +38,7 @@ namespace llvm {
     void printCCOperand(const MCInst *MI, unsigned OpNo, raw_ostream &O);
     void printPredicateOperand(const MCInst *MI, unsigned OpNo,
         raw_ostream &O);
+
   };
 }
 

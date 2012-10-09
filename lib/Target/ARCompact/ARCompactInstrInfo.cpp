@@ -22,8 +22,6 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 
-#include "llvm/CodeGen/MachineInstrBuilder.h"
-
 #define GET_INSTRINFO_CTOR
 #include "ARCompactGenInstrInfo.inc"
 

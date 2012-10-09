@@ -20,9 +20,9 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/Target/TargetData.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/DataLayout.h"
 #include "llvm/Metadata.h"
 #include "llvm/LLVMContext.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -87,6 +87,7 @@ using namespace llvm;
  */
 
 void ARCompactFrameLowering::emitPrologue(MachineFunction &MF) const {
+  //dbgs() << "Prologue\n";
   MachineBasicBlock &MBB = MF.front();
   MachineBasicBlock::iterator MBBI = MBB.begin();
   MachineFrameInfo  *MFI = MF.getFrameInfo();

@@ -33,7 +33,6 @@ using namespace llvm;
 
 ARCompactTargetLowering::ARCompactTargetLowering(ARCompactTargetMachine &tm)
     : TargetLowering(tm, new TargetLoweringObjectFileELF()) {
-  //DEBUG(dbgs() << "ARCompactTargetLowering::ARCompactTargetLowering()\n");
   // Set up the register classes.
   addRegisterClass(MVT::i32, &ARC::CPURegsRegClass);
 
@@ -170,7 +169,7 @@ SDValue ARCompactTargetLowering::LowerFormalArguments(SDValue Chain,
     if (VA.isRegLoc()) {
       // Arguments passed in registers.
 
-      TargetRegisterClass RC = ARC::CPURegsRegClass;
+      const TargetRegisterClass RC = ARC::CPURegsRegClass;
       unsigned int Register = MF.addLiveIn(VA.getLocReg(), &RC);
       EVT RegisterValueType = VA.getLocVT();
       ArgValue = DAG.getCopyFromReg(Chain, dl, Register, RegisterValueType);
@@ -238,7 +237,7 @@ SDValue ARCompactTargetLowering::LowerFormalArguments(SDValue Chain,
     // Now place as many varargs into the registers as we can.
     SmallVector<SDValue, 8> MemOps;
     for (; FirstFreeIndex < 8; ++FirstFreeIndex) {
-      TargetRegisterClass RC = ARC::CPURegsRegClass;
+      const TargetRegisterClass RC = ARC::CPURegsRegClass;
       unsigned VReg = MF.addLiveIn(ArgumentRegisters[FirstFreeIndex], &RC);
       SDValue Val = DAG.getCopyFromReg(Chain, dl, VReg, MVT::i32);
       SDValue Store = DAG.getStore(Val.getValue(1), dl, Val, FIN, 
@@ -313,15 +312,19 @@ SDValue ARCompactTargetLowering::LowerReturn(SDValue Chain,
       RetAddrOffsetNode);
 }
 
-SDValue ARCompactTargetLowering::LowerCall(SDValue Chain, SDValue Callee,
-    CallingConv::ID CallConv, bool isVarArg, bool &isTailCall,
-    const SmallVectorImpl<ISD::OutputArg> &Outs,
-    const SmallVectorImpl<SDValue> &OutVals,
-    const SmallVectorImpl<ISD::InputArg> &Ins,
-    DebugLoc dl, SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
-  //DEBUG(dbgs() << "ARCompactTargetLowering::LowerCall()\n");
-  //DEBUG(Chain.getNode()->dump());
-  //DEBUG(dbgs() << "isVarArg? " << isVarArg << "\n");
+SDValue ARCompactTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
+    SmallVectorImpl<SDValue> &InVals) const {
+  SelectionDAG &DAG                      = CLI.DAG;
+  DebugLoc &dl                           = CLI.DL;
+  SmallVector<ISD::OutputArg, 32> &Outs  = CLI.Outs;
+  SmallVector<SDValue, 32> &OutVals = CLI.OutVals;
+  SmallVector<ISD::InputArg, 32> &Ins    = CLI.Ins;
+  SDValue Chain                          = CLI.Chain;
+  SDValue Callee                         = CLI.Callee;
+  bool &isTailCall                       = CLI.IsTailCall;
+  CallingConv::ID CallConv               = CLI.CallConv;
+  bool isVarArg                          = CLI.IsVarArg;
+
   // ARCompact does not support tail calls yet.
   isTailCall = false;
 

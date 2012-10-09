@@ -18,7 +18,7 @@
 // 32-bit C return-value convention.
 def RetCC_ARCompact32 : CallingConv<[
   // TODO: Check if only R0 should be used for return values.
-  CCIfType<[i32], CCAssignToReg<[R0]>>
+  CCIfType<[i32], CCAssignToReg<[R0, R1, R2, R3, R4, R5, R6, R7]>>
 ]>;
 
 // 32-bit C Calling convention.

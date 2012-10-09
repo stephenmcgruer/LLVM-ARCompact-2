@@ -40,7 +40,7 @@ struct ARCompactRegisterInfo : public ARCompactGenRegisterInfo {
   /// considered unavailable at all times, e.g. SP, BLINK.
   BitVector getReservedRegs(const MachineFunction &MF) const;
 
-  /// This method is called during prolog/epilog code insertion to eliminate
+  ///  This method is called during prolog/epilog code insertion to eliminate
   /// call frame setup and destroy pseudo instructions, such as ADJCALLSTACKUP
   /// and ADJCALLSTACKDOWN.
   void eliminateCallFramePseudoInstr(MachineFunction &MF,
@@ -51,8 +51,11 @@ struct ARCompactRegisterInfo : public ARCompactGenRegisterInfo {
       RegScavenger *RS = NULL) const;
 
   // Debug information queries.
-  unsigned getFrameRegister(const MachineFunction &MF) const;
   unsigned getRARegister() const;
+  unsigned getFrameRegister(const MachineFunction &MF) const;
+
+  const TargetRegisterClass* getPointerRegClass(const MachineFunction &MF,
+      unsigned Kind = 0) const;
 };
 
 } // end namespace llvm

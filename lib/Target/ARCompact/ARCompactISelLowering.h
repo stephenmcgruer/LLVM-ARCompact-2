@@ -83,12 +83,8 @@ namespace llvm {
     /// described by the Ins array. The implementation should fill in the
     /// InVals array with legal-type return values from the call, and return
     /// the resulting token chain value.
-    virtual SDValue LowerCall(SDValue Chain, SDValue Callee,
-        CallingConv::ID CallConv, bool isVarArg, bool &isTailCall,
-        const SmallVectorImpl<ISD::OutputArg> &Outs,
-        const SmallVectorImpl<SDValue> &OutVals,
-        const SmallVectorImpl<ISD::InputArg> &Ins,
-        DebugLoc dl, SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const;
+    virtual SDValue LowerCall(TargetLowering::CallLoweringInfo &CLI,
+        SmallVectorImpl<SDValue> &InVals) const;
 
     /// LowerCallResult - Lower the result values of an ISD::CALL into the
     /// appropriate copies out of appropriate physical registers.
