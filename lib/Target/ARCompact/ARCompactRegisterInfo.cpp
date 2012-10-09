@@ -59,6 +59,9 @@ BitVector ARCompactRegisterInfo::getReservedRegs(const MachineFunction &MF)
   Reserved.set(ARC::ILINK1);
   Reserved.set(ARC::ILINK2);
 
+  // As with ARC-GCC, I reserve R12 (T4) for temporary calculations.
+  Reserved.set(ARC::T4);
+
   return Reserved;
 }
 
@@ -87,9 +90,12 @@ void ARCompactRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     int SPAdj, RegScavenger *RS) const {
   assert(SPAdj == 0 && "Unexpected non-zero adjustment!");
 
+  MachineInstr &MI = *II;
+  MachineBasicBlock &MBB = *MI.getParent();
+  DebugLoc dl = MI.getDebugLoc();
+
   // Find the frame index operand.
   unsigned i = 0;
-  MachineInstr &MI = *II;
   while (!MI.getOperand(i).isFI()) {
     ++i;
     assert(i < MI.getNumOperands() && "Instr doesn't have FrameIndex operand!");
@@ -106,14 +112,25 @@ void ARCompactRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   if (IsStore(MI)) {
     // Store instructions have at most a 9-bit signed immediate offset. Therefore,
     // if the offset is outside this range we need to do something.
-    // TODO: What should we do?
     if (Offset >= -256 && Offset <= 255) {
       MI.getOperand(i).ChangeToRegister(ARC::FP, false);
       MI.getOperand(i+1).ChangeToImmediate(Offset);
     } else {
-      MI.getOperand(i).ChangeToRegister(ARC::FP, false);
-      MI.getOperand(i+1).ChangeToImmediate(255);
-      //llvm_unreachable("Offset immediate too small or too big!");
+      // We insert an ADD to get the value within range. Register T4 (R12) is
+      // reserved for this purpose.
+      // TODO: Use RegScavenger so that T4 does not have to be reserved.
+      int difference;
+      if (Offset > 255) {
+        difference = Offset - 255;
+      } else {
+        difference = Offset + 256;
+      }
+      BuildMI(MBB, II, dl, TII.get(ARC::ADDrli), ARC::T4).addReg(ARC::FP)
+          .addImm(difference);
+      Offset -= difference;
+
+      MI.getOperand(i).ChangeToRegister(ARC::T4, false);
+      MI.getOperand(i+1).ChangeToImmediate(Offset);
     }
   } else {
     // For now, just default to converting the frame index.
