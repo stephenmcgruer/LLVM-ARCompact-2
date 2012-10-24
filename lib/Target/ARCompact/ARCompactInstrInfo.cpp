@@ -14,7 +14,9 @@
 #include "ARCompactInstrInfo.h"
 #include "ARCompact.h"
 #include "ARCompactSubtarget.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/Support/BranchProbability.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -52,15 +54,26 @@ void ARCompactInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
       .addReg(SrcReg, getKillRegState(isKill));
 }
 
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
+
 void ARCompactInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
     MachineBasicBlock::iterator MI, unsigned DestReg, int FrameIdx,
     const TargetRegisterClass *RC, const TargetRegisterInfo *TRI) const {
   DebugLoc DL;
   if (MI != MBB.end()) DL = MI->getDebugLoc();
 
-  BuildMI(MBB, MI, DL, get(ARC::LDrli))
-      .addReg(DestReg)
-      .addFrameIndex(FrameIdx).addImm(0);
+  MachineFunction &MF = *MBB.getParent();
+  MachineFrameInfo &MFI = *MF.getFrameInfo();
+  unsigned Align = MFI.getObjectAlignment(FrameIdx);
+  MachineMemOperand *MMO = MF.getMachineMemOperand(
+      MachinePointerInfo::getFixedStack(FrameIdx),
+      MachineMemOperand::MOLoad,
+      MFI.getObjectSize(FrameIdx),
+      Align);
+  
+  BuildMI(MBB, MI, DL, get(ARC::LDri), DestReg)
+      .addFrameIndex(FrameIdx).addImm(0).addMemOperand(MMO);
 }
 
 bool ARCompactInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,

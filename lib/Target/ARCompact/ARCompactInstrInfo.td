@@ -560,9 +560,9 @@ def LDrr : Pseudo<(outs CPURegs:$dst), (ins MEMrr:$addr),
                     "ld $dst,$addr",
                     [(set CPURegs:$dst, (load ADDRrr:$addr))]>;
 
-def LDrli : Pseudo<(outs CPURegs:$dst), (ins MEMrli:$addr),
-                    "ld $dst,$addr",
-                    [(set CPURegs:$dst, (load ADDRrli:$addr))]>;
+//def LDrli : Pseudo<(outs CPURegs:$dst), (ins MEMrli:$addr),
+//                    "ld $dst,$addr",
+//                    [(set CPURegs:$dst, (load ADDRrli:$addr))]>;
 
 def LDlir : Pseudo<(outs CPURegs:$dst), (ins MEMlir:$addr),
                     "ld $dst,$addr",
@@ -592,6 +592,7 @@ def LDri_sextw : Pseudo<(outs CPURegs:$dst), (ins MEMri:$addr),
 
 // Address-write back versions of ST. These are not pattern matched yet but
 // are provided for use by the prologue/epilogue emitters.
+let mayLoad = 1, hasSideEffects = 1 in {
 def LDri_a : Pseudo<(outs CPURegs:$src), (ins MEMri:$addr),
                     "ld.a $src,$addr",
                     []>;
@@ -599,6 +600,7 @@ def LDri_a : Pseudo<(outs CPURegs:$src), (ins MEMri:$addr),
 def LDri_ab : Pseudo<(outs CPURegs:$src), (ins MEMri:$addr),
                     "ld.ab $src,$addr",
                     []>;
+}
 
 // LSR - Page 254.
 //    Logically shifts the source operand right, and places the result in the
@@ -752,9 +754,11 @@ def STrri_i16 : Pseudo<(outs), (ins MEMri:$addr, CPURegs:$src),
 
 // Address-write back versions of ST. These are not pattern matched yet but
 // are provided for use by the prologue/epilogue emitters.
+let mayStore = 1, hasSideEffects = 1 in {
 def STrri_a : Pseudo<(outs), (ins MEMri:$addr, CPURegs:$src),
                       "st.a $src,$addr",
                       []>;
+}
 
 // SUB - Page 312.
 //    Subtracts the second source operand from the first, and places the result
