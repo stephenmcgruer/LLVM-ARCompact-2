@@ -43,6 +43,8 @@ ARCompactTargetLowering::ARCompactTargetLowering(ARCompactTargetMachine &tm)
   // Do not have division, so int-division is expensive.
   setIntDivIsCheap(false);
 
+  setStackPointerRegisterToSaveRestore(ARC::SP);
+
   // We don't have 1-bit extension (i.e. for bools).
   setLoadExtAction(ISD::EXTLOAD,  MVT::i1,  Promote);
   setLoadExtAction(ISD::SEXTLOAD, MVT::i1,  Promote);
@@ -97,6 +99,8 @@ ARCompactTargetLowering::ARCompactTargetLowering(ARCompactTargetMachine &tm)
   setOperationAction(ISD::UMUL_LOHI,      MVT::i32,   Expand);
 
   setOperationAction(ISD::BSWAP,          MVT::i32,   Expand);
+
+  setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i32, Expand);
 }
 
 const char* ARCompactTargetLowering::getTargetNodeName(unsigned Opcode) const {
