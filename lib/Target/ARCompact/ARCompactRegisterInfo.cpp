@@ -59,6 +59,8 @@ BitVector ARCompactRegisterInfo::getReservedRegs(const MachineFunction &MF)
   Reserved.set(ARC::ILINK1);
   Reserved.set(ARC::ILINK2);
 
+  Reserved.set(ARC::STATUS32);
+
   // As with ARC-GCC, I reserve R12 (T4) for temporary calculations.
   Reserved.set(ARC::T4);
 
