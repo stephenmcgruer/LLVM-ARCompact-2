@@ -159,6 +159,12 @@ void ARCompactFrameLowering::emitEpilogue(MachineFunction &MF,
         .addImm(NumBytes);
   }
 
+  // If there have been var sized objects (dynamic alloca/etc), we need to fix
+  // the SP.
+  if (MFI->hasVarSizedObjects()) {
+    BuildMI(MBB, MBBI, dl, TII.get(ARC::MOVrr), ARC::SP).addReg(ARC::FP);
+  }
+
   // TODO: Restore any registers from the register-save area.
 
   // Load the frame pointer back.
