@@ -108,18 +108,21 @@ void ARCompactFrameLowering::emitPrologue(MachineFunction &MF) const {
   }
 
   // Save the return address register, if necessary
-  if (MFI->adjustsStack()) {
-    BuildMI(MBB, MBBI, dl, TII.get(ARC::STrri_a)).addReg(ARC::SP)
-        .addImm(-UNITS_PER_WORD).addReg(ARC::BLINK);
+  if (MFI->hasCalls()) {
+    BuildMI(MBB, MBBI, dl, TII.get(ARC::STrri_a))
+        .addReg(ARC::SP)
+        .addImm(-UNITS_PER_WORD)
+        .addReg(ARC::BLINK);
   }
 
   // TODO: Create the register save area, and save the required registers to it.
 
   // Save the caller's frame pointer (if required), and set new FP to this
   // location.
-  // TODO: Work out if the frame pointer is required.
-  BuildMI(MBB, MBBI, dl, TII.get(ARC::STrri_a)).addReg(ARC::SP)
-      .addImm(-UNITS_PER_WORD).addReg(ARC::FP);
+  BuildMI(MBB, MBBI, dl, TII.get(ARC::STrri_a))
+      .addReg(ARC::SP)
+      .addImm(-UNITS_PER_WORD)
+      .addReg(ARC::FP);
   BuildMI(MBB, MBBI, dl, TII.get(ARC::MOVrr), ARC::FP).addReg(ARC::SP);
 
   // Allocate space for local registers.
