@@ -160,13 +160,13 @@ void ARCompactFrameLowering::emitEpilogue(MachineFunction &MF,
 
   // Load the frame pointer back.
   // TODO: Work out if the frame pointer was needed.
-  BuildMI(MBB, MBBI, dl, TII.get(ARC::LDri_ab)).addReg(ARC::FP).addReg(ARC::SP)
+  BuildMI(MBB, MBBI, dl, TII.get(ARC::LDri_ab), ARC::FP).addReg(ARC::SP)
       .addImm(UNITS_PER_WORD);
 
   // Restore the return address register, if needed.
-  if (MFI->adjustsStack()) {
-    BuildMI(MBB, MBBI, dl, TII.get(ARC::LDri_ab)).addReg(ARC::BLINK)
-        .addReg(ARC::SP).addImm(UNITS_PER_WORD);
+  if (MFI->hasCalls()) {
+    BuildMI(MBB, MBBI, dl, TII.get(ARC::LDri_ab), ARC::BLINK).addReg(ARC::SP)
+        .addImm(UNITS_PER_WORD);
   }
 
   unsigned VARegSaveSize = AFI->getVarArgsRegSaveSize();
