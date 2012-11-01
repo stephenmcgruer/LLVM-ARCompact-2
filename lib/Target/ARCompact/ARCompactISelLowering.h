@@ -100,10 +100,17 @@ namespace llvm {
 
     virtual EVT getSetCCResultType(EVT VT) const;
 
+    SDValue getReturnAddressFrameIndex(SelectionDAG &DAG) const;
+
+  private:
+    const TargetData *TD;
+
     SDValue LowerBR_CC(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const;
 
     MachineBasicBlock* EmitInstrWithCustomInserter(MachineInstr *MI,
         MachineBasicBlock *BB) const;

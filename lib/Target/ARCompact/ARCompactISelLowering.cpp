@@ -33,6 +33,9 @@ using namespace llvm;
 
 ARCompactTargetLowering::ARCompactTargetLowering(ARCompactTargetMachine &tm)
     : TargetLowering(tm, new TargetLoweringObjectFileELF()) {
+
+  TD = getTargetData();
+
   //DEBUG(dbgs() << "ARCompactTargetLowering::ARCompactTargetLowering()\n");
   // Set up the register classes.
   addRegisterClass(MVT::i32, &ARC::CPURegsRegClass);
@@ -120,11 +123,13 @@ SDValue ARCompactTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG)
     const {
   //DEBUG(dbgs() << "ARCompactTargetLowering::LowerOperation()\n");
   switch (Op.getOpcode()) {
-    case ISD::GlobalAddress:    return LowerGlobalAddress(Op, DAG);
-    case ISD::BR_CC:            return LowerBR_CC(Op, DAG);
-    case ISD::SELECT_CC:        return LowerSELECT_CC(Op, DAG);
-    case ISD::VASTART:          return LowerVASTART(Op, DAG);
-      default:
+    case ISD::GlobalAddress:        return LowerGlobalAddress(Op, DAG);
+    case ISD::BR_CC:                return LowerBR_CC(Op, DAG);
+    case ISD::SELECT_CC:            return LowerSELECT_CC(Op, DAG);
+    case ISD::VASTART:              return LowerVASTART(Op, DAG);
+    case ISD::FRAMEADDR:            return LowerFRAMEADDR(Op, DAG);
+    case ISD::RETURNADDR:           return LowerRETURNADDR(Op, DAG);
+    default:
       assert(0 && "Unimplemented operation!");
       return SDValue();
   }
@@ -583,6 +588,66 @@ SDValue ARCompactTargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG)
   // will take care of.
   return DAG.getNode(ARCISD::SELECT_CC, dl, VTs, &Ops[0], Ops.size());
 }
+
+SDValue ARCompactTargetLowering::getReturnAddressFrameIndex(SelectionDAG &DAG)
+    const {
+  MachineFunction &MF = DAG.getMachineFunction();
+  ARCompactMachineFunctionInfo *FuncInfo =
+      MF.getInfo<ARCompactMachineFunctionInfo>();
+  int ReturnAddrIndex = FuncInfo->getRAIndex();
+
+  if (ReturnAddrIndex == 0) {
+    // Set up a frame object for the return address.
+    uint64_t SlotSize = TD->getPointerSize();
+    ReturnAddrIndex = MF.getFrameInfo()->CreateFixedObject(SlotSize, -SlotSize,
+        false);
+    FuncInfo->setRAIndex(ReturnAddrIndex);
+  }
+
+  return DAG.getFrameIndex(ReturnAddrIndex, getPointerTy());
+}
+
+SDValue ARCompactTargetLowering::LowerRETURNADDR(SDValue Op, SelectionDAG &DAG)
+    const {
+  MachineFrameInfo *MFI = DAG.getMachineFunction().getFrameInfo();
+  MFI->setReturnAddressIsTaken(true);
+
+  unsigned Depth = cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue();
+  DebugLoc dl = Op.getDebugLoc();
+
+  if (Depth > 0) {
+    SDValue FrameAddr = LowerFRAMEADDR(Op, DAG);
+    SDValue Offset = DAG.getConstant(TD->getPointerSize(), MVT::i32);
+    return DAG.getLoad(getPointerTy(), dl, DAG.getEntryNode(),
+                       DAG.getNode(ISD::ADD, dl, getPointerTy(),
+                                   FrameAddr, Offset),
+                       MachinePointerInfo(), false, false, false, 0);
+  }
+
+  // Just load the return address.
+  SDValue RetAddrFI = getReturnAddressFrameIndex(DAG);
+  return DAG.getLoad(getPointerTy(), dl, DAG.getEntryNode(),
+                     RetAddrFI, MachinePointerInfo(), false, false, false, 0);
+}
+
+
+SDValue ARCompactTargetLowering::LowerFRAMEADDR(SDValue Op, SelectionDAG &DAG)
+    const {
+  MachineFrameInfo *MFI = DAG.getMachineFunction().getFrameInfo();
+  MFI->setFrameAddressIsTaken(true);
+
+  EVT VT = Op.getValueType();
+  DebugLoc dl = Op.getDebugLoc();  // FIXME probably not meaningful
+  unsigned Depth = cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue();
+  unsigned FrameReg = ARC::FP;
+  SDValue FrameAddr = DAG.getCopyFromReg(DAG.getEntryNode(), dl, FrameReg, VT);
+  while (Depth--)
+    FrameAddr = DAG.getLoad(VT, dl, DAG.getEntryNode(), FrameAddr,
+        MachinePointerInfo(),
+        false, false, false, 0);
+  return FrameAddr;
+}
+
 
 SDValue ARCompactTargetLowering::LowerGlobalAddress(SDValue Op,
     SelectionDAG &DAG) const {

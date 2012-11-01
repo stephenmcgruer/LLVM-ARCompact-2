@@ -30,15 +30,20 @@ class ARCompactMachineFunctionInfo : public MachineFunctionInfo {
   /// VarArgsFrameIndex - FrameIndex for start of varargs area.
   int VarArgsFrameIndex;
 
+  /// ReturnAddrIndex - FrameIndex for return slot.
+  int ReturnAddrIndex;
+
 public:
   ARCompactMachineFunctionInfo()
       : VarArgsRegSaveSize(0),
-        VarArgsFrameIndex(0) {
+        VarArgsFrameIndex(0),
+        ReturnAddrIndex(0) {
   }
 
   explicit ARCompactMachineFunctionInfo(MachineFunction &MF)
       : VarArgsRegSaveSize(0),
-        VarArgsFrameIndex(0) {
+        VarArgsFrameIndex(0),
+        ReturnAddrIndex(0) {
   }
 
   unsigned getVarArgsRegSaveSize() const { return VarArgsRegSaveSize; }
@@ -46,6 +51,9 @@ public:
 
   int getVarArgsFrameIndex() const { return VarArgsFrameIndex; }
   void setVarArgsFrameIndex(int Index) { VarArgsFrameIndex = Index; }
+
+  int getRAIndex() const { return ReturnAddrIndex; }
+  void setRAIndex(int Index) { ReturnAddrIndex = Index; }
 };
 } // End llvm namespace
 
