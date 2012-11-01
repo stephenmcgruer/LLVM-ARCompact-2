@@ -15,10 +15,15 @@
 #include "ARCompact.h"
 #include "ARCompactRegisterInfo.h"
 #include "ARCompactSubtarget.h"
+#include "ARCompactMachineFunctionInfo.h"
+#include "llvm/Function.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/raw_ostream.h"
+
 #include "llvm/Target/TargetInstrInfo.h"
 #include "llvm/Type.h"
 #include "llvm/ADT/BitVector.h"
@@ -93,8 +98,13 @@ void ARCompactRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   assert(SPAdj == 0 && "Unexpected non-zero adjustment!");
 
   MachineInstr &MI = *II;
+  MachineFunction &MF = *MI.getParent()->getParent();
+  MachineFrameInfo *MFI = MF.getFrameInfo();
+  ARCompactMachineFunctionInfo *ARCompactFI = 
+      MF.getInfo<ARCompactMachineFunctionInfo>();
   MachineBasicBlock &MBB = *MI.getParent();
-  DebugLoc dl = MI.getDebugLoc();
+  DebugLoc dl = II->getDebugLoc();
+
 
   // Find the frame index operand.
   unsigned i = 0;
@@ -102,44 +112,62 @@ void ARCompactRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     ++i;
     assert(i < MI.getNumOperands() && "Instr doesn't have FrameIndex operand!");
   }
+
+  DEBUG(errs() << "\nFunction : " << MF.getFunction()->getName() << "\n";
+        errs() << "<--------->\n" << MI);
+
   int FrameIndex = MI.getOperand(i).getIndex();
+  uint64_t stackSize = MFI->getStackSize();
+  int64_t spOffset = MFI->getObjectOffset(FrameIndex);
 
-  // Addressable stack objects are accessed using negative offsets from the
-  // frame pointer.
-  MachineFunction &MF = *MI.getParent()->getParent();
-  int Offset = MF.getFrameInfo()->getObjectOffset(FrameIndex) +
-      MI.getOperand(i + 1).getImm();
+  DEBUG(errs() << "FrameIndex : " << FrameIndex << "\n"
+               << "spOffset   : " << spOffset << "\n"
+               << "stackSize  : " << stackSize << "\n"
+               << "VARegsStart: " << ARCompactFI->getVarArgsFrameIndex() << "\n"
+               << "VARegsSize : " << ARCompactFI->getVarArgsRegSaveSize() << "\n");
 
-  // Replace the frame index with a frame pointer reference.
-  if (IsStore(MI)) {
-    // Store instructions have at most a 9-bit signed immediate offset. Therefore,
-    // if the offset is outside this range we need to do something.
-    if (Offset >= -256 && Offset <= 255) {
-      MI.getOperand(i).ChangeToRegister(ARC::FP, false);
-      MI.getOperand(i+1).ChangeToImmediate(Offset);
-    } else {
-      // We insert an ADD to get the value within range. Register T4 (R12) is
-      // reserved for this purpose.
-      // TODO: Use RegScavenger so that T4 does not have to be reserved.
-      int difference;
-      if (Offset > 255) {
-        difference = Offset - 255;
-      } else {
-        difference = Offset + 256;
-      }
-      BuildMI(MBB, II, dl, TII.get(ARC::ADDrli), ARC::T4).addReg(ARC::FP)
-          .addImm(difference);
-      Offset -= difference;
+  // TODO: Callee Saved Info?
 
-      MI.getOperand(i).ChangeToRegister(ARC::T4, false);
-      MI.getOperand(i+1).ChangeToImmediate(Offset);
+  // TODO: Figure out when to use SP and when to use FP. For now always use FP.
+  unsigned FrameReg = ARC::FP;
+
+  // Figure out the offset. If the frame index is for a memory argument, need to
+  // offset by the space used for BLINK (if required) and the old FP (always).
+  // TODO: Guess at memloc better.
+  int64_t Offset = spOffset;
+  if (FrameIndex < 0 && FrameIndex != ARCompactFI->getVarArgsFrameIndex()) {
+    // Assuming atm that this means memloc argument.
+    Offset += 4; // For the saved FP.
+    if (MFI->hasCalls()) {
+      Offset += 4; // For the BLINK.
     }
-  } else {
-    // For now, just default to converting the frame index.
-    // TODO: What other instructions hit this function - load?
-    MI.getOperand(i).ChangeToRegister(ARC::FP, false);
-    MI.getOperand(i+1).ChangeToImmediate(Offset);
   }
+  Offset += MI.getOperand(i+1).getImm();
+  DEBUG(errs() << "MI.getOpera: " << MI.getOperand(i+1).getImm() << "\n");
+  DEBUG(errs() << "Offset     : " << Offset << "\n");
+
+  if (IsStore(MI) && !isInt<9>(Offset)) {
+    // We insert an ADD to get the value within range. Register T4 (R12) is
+    // reserved for this purpose.
+    int Difference;
+    if (Offset > 255) {
+      Difference = Offset - 255;
+    } else {
+      Difference = Offset + 256;
+    }
+    DEBUG(errs() << "Difference: " << Difference << "\n");
+
+    BuildMI(MBB, II, dl, TII.get(ARC::ADDrli), ARC::T4).addReg(ARC::FP)
+        .addImm(Difference);
+    Offset -= Difference;
+
+    FrameReg = ARC::T4;
+  }
+
+  DEBUG(errs() << "<--------->\n");
+
+  MI.getOperand(i).ChangeToRegister(FrameReg, false);
+  MI.getOperand(i+1).ChangeToImmediate(Offset);
 }
 
 // Return-Address Register.
