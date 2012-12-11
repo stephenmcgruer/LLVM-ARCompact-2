@@ -8,13 +8,14 @@
 ##===----------------------------------------------------------------------===##
 
 LEVEL = ../..
-PARALLEL_DIRS = Utils Instrumentation Scalar InstCombine IPO Vectorize Hello
+PARALLEL_DIRS = Utils Instrumentation Scalar InstCombine IPO Vectorize Hello FeatureExtraction
 
 include $(LEVEL)/Makefile.config
 
 # No support for plugins on windows targets
 ifeq ($(HOST_OS), $(filter $(HOST_OS), Cygwin MingW Minix))
   PARALLEL_DIRS := $(filter-out Hello, $(PARALLEL_DIRS))
+  PARALLEL_DIRS := $(filter-out FeatureExtraction, $(PARALLEL_DIRS))
 endif
 
 include $(LEVEL)/Makefile.common
