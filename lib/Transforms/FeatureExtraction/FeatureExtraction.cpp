@@ -16,8 +16,12 @@ using namespace llvm;
 
 namespace {
 
+  // =========== FunctionFeatureExtraction ===========
+
   bool FunctionFeatureExtraction::runOnFunction(Function &F) {
     FunctionCount++;
+
+    // Count the number of allocated floats and integers.
     for (Function::iterator FI = F.begin(), FE = F.end(); FI != FE; ++FI) {
       for (BasicBlock::const_iterator I = FI->begin(), E = FI->end(); I != E;
           ++I) {
@@ -30,21 +34,25 @@ namespace {
         }
       }
     }
+
+    // We do not edit the CFG.
     return false;
   }
 
   bool FunctionFeatureExtraction::doFinalization(Module &M) {
+    bool UsesFloatAndIntegers = NumberIntegers > 0 && NumberFloats > 0;
+
+    // Dump the information.
     errs() << "FunctionCount: " << FunctionCount << "\n";
     errs() << "NumberIntegers: " << NumberIntegers << "\n";
     errs() << "NumberFloats: " << NumberFloats << "\n";
-    errs() << "UsesFloatAndIntegerVariables: ";
-    if (NumberIntegers > 0 && NumberFloats > 0) {
-      errs() << "1\n";
-    } else {
-      errs() << "0\n";
-    }
+    errs() << "UsesFloatAndIntegerVariables: " << UsesFloatAndIntegers << "\n";
+
+    // We do not edit the CFG.
     return false;
   }
+
+  // =========== LoopFeatureExtraction ===========
   
   LoopFeatureExtraction::~LoopFeatureExtraction() {
     while (!LoopStructs.empty()) {
@@ -61,205 +69,206 @@ namespace {
     LoopStruct* LS = new LoopStruct(L);
     LoopStructs.push_back(LS);
 
+    // Add basic information about the iterator variable, loop bounds,
+    // etc.
     LS->IteratorVariable = GetIteratorVariable(L);
     ParseLoopBounds(LS, L, LI);
     LS->IsNested = L->getParentLoop() != NULL;
     LS->NestDepth = L->getLoopDepth();
 
+    // Parse each BasicBlock.
     for (Loop::block_iterator BI = L->block_begin(), BE = L->block_end();
         BI != BE; ++BI) {
       const BasicBlock* BB = *BI;
-      if (LI.getLoopDepth(BB) != LS->NestDepth) {
-        // In a nested loop.
+
+      if (LI.getLoopFor(BB) != L) {
+        // This BasicBlock belongs to a child loop, so ignore it.
         continue;
       }
-      LS->NumberInstructions += BB->size();
 
-      for (BasicBlock::const_iterator I = BB->begin(), E = BB->end(); I != E;
-          ++I) {
-        if (dyn_cast<LoadInst>(I)) {
-          LS->NumberLoads++;
-        } else if (const StoreInst* SI = dyn_cast<StoreInst>(I)) {
-          LS->NumberStores++;
+      runOnBasicBlock(BB, LS, LI);
+    }
 
-          if (dyn_cast<LoadInst>(SI->getValueOperand()) && 
-              dyn_cast<AllocaInst>(SI->getPointerOperand())) {
-            LS->NumberMemoryCopies++;
-          }
-        } else if (dyn_cast<CmpInst>(I)) {
-          LS->NumberCompares++;
-        } else if (const BranchInst* BI = dyn_cast<BranchInst>(I)) {
-          LS->NumberBranches++;
+    // We do not edit the CFG.
+    return false;
+  }
 
-          // Spotting If statements is difficult in LLVM IR. If a branch
-          // statement can only result in locations that are in the same
-          // loop and at the same loop level, it is an If statement of
-          // some kind.
-          // This likely also counts some other cases, but that's ok.
-          if (BI->isConditional()) {
-            bool IsIfStatement = true;
-            unsigned int NumberSuccessors = BI->getNumSuccessors();
-            for (unsigned int i = 0; i < NumberSuccessors; i++) {
-              if (!L->contains(BI->getSuccessor(i)) || 
-                  LI.getLoopDepth(BI->getSuccessor(i)) != LS->NestDepth) {
-                IsIfStatement = false;
-              }
-            }
-            LS->ContainsIfStatement = 
-                LS->ContainsIfStatement || IsIfStatement;
-          }
-        } else if (const IndirectBrInst* IBI = dyn_cast<IndirectBrInst>(I)) {
-          LS->NumberBranches++;
+  void LoopFeatureExtraction::runOnBasicBlock(const BasicBlock* BB,
+      LoopStruct* LS, LoopInfo& LI) {
+    Loop* L = LS->TheLoop;
 
-          // Spotting If statements is difficult in LLVM IR. If a branch
-          // statement can only result in locations that are in the same
-          // loop and at the same loop level, it is an If statement of
-          // some kind.
-          // This likely also counts some other cases, but that's ok.
+    LS->NumberInstructions += BB->size();
+
+    // Parse each instruction in the BasicBlock.
+    for (BasicBlock::const_iterator I = BB->begin(), E = BB->end(); I != E;
+        ++I) {
+
+      // NumberLoads.
+      if (isa<LoadInst>(I)) {
+        LS->NumberLoads++;
+      }
+
+      // NumberStores, NumberMemoryCopies.
+      if (const StoreInst* SI = dyn_cast<StoreInst>(I)) {
+        LS->NumberStores++;
+
+        // Check if the source and destination are both memory locations,
+        // which equates to copying memory.
+        if (isa<LoadInst>(SI->getValueOperand()) && 
+            isa<AllocaInst>(SI->getPointerOperand())) {
+          LS->NumberMemoryCopies++;
+        }
+      }
+
+      // NumberCompares.
+      if (isa<CmpInst>(I)) {
+        LS->NumberCompares++;
+      }
+
+      // NumberBranches, ContainsIfStatement.
+      if (const BranchInst* BI = dyn_cast<BranchInst>(I)) {
+        LS->NumberBranches++;
+
+        // Spotting if-statements is difficult in LLVM IR. If a branch can only
+        // result in locations that are in the same loop, it is an if-statement
+        // of some kind.
+        if (BI->isConditional()) {
+          // Initially assume every BranchInst is an if-statement.
           bool IsIfStatement = true;
-          unsigned int NumberDestinations = IBI->getNumDestinations();
-          for (unsigned int i = 0; i < NumberDestinations; i++) {
-            if (!L->contains(IBI->getDestination(i)) || 
-                LI.getLoopDepth(IBI->getDestination(i)) != LS->NestDepth) {
+
+          // Look for successors who aren't in this loop.
+          unsigned int NumberSuccessors = BI->getNumSuccessors();
+          for (unsigned int i = 0; i < NumberSuccessors; i++) {
+            BasicBlock* Successor = BI->getSuccessor(i);
+
+            if (LI.getLoopFor(Successor) != L) {
               IsIfStatement = false;
             }
           }
 
-          LS->ContainsIfStatement = 
-              LS->ContainsIfStatement || IsIfStatement;
-        } else if (const BinaryOperator* BO = dyn_cast<BinaryOperator>(I)) {
-          if (BO->getOpcode() == Instruction::SDiv ||
-              BO->getOpcode() == Instruction::UDiv) {
-            LS->NumberDivides++;
+          LS->ContainsIfStatement = LS->ContainsIfStatement || IsIfStatement;
+        }
+      }
+
+      // NumberBranches.
+      if (isa<IndirectBrInst>(I)) {
+        LS->NumberBranches++;
+      }
+
+      // NumberDivides, NumberGenericInstructions.
+      if (const BinaryOperator* BO = dyn_cast<BinaryOperator>(I)) {
+        if (BO->getOpcode() == Instruction::SDiv ||
+            BO->getOpcode() == Instruction::UDiv) {
+          LS->NumberDivides++;
+        }
+
+        // Check for generic instructions.
+        switch (BO->getOpcode()) {
+          case Instruction::Add:  // a + b
+          case Instruction::Sub:  // a - b
+          case Instruction::Mul:  // a * b
+          case Instruction::URem: // a % b (unsigned)
+          case Instruction::SRem: // a % b (signed)
+          case Instruction::Shl:  // a << b
+          case Instruction::LShr: // a >> b
+          case Instruction::AShr: // a >>> b
+          case Instruction::And:  // a & b
+          case Instruction::Or:   // a | b
+          case Instruction::Xor:  // a ^ b
+            LS->NumberGenericInstructions++;
+          default:
+            // Do nothing.
+            break;
+        }
+      }
+
+      // NumberCalls.
+      if (isa<CallInst>(I)) {
+        LS->NumberCalls++;
+      }
+
+      // NumberArrayInstructions, NumberArrayReferences,
+      // AllArrayIndicesConstant, LoopIteratorIsArrayIndex,
+      // StridesOnlyOnLeadingDimensions.
+      if (const GetElementPtrInst* GEP = dyn_cast<GetElementPtrInst>(I)) {
+        const Value* GEPPointer = GEP->getPointerOperand();
+        Type* GEPPointerType = GEP->getPointerOperandType();
+
+        // Nicely, clang on -O0 will produce a GEP for *every* array access,
+        // even to the same constant location multiple times in a row. This
+        // means that every array access is represented by a GEP of type
+        // 'Pointer To Array'.
+        if (isa<PointerType>(GEPPointerType) &&
+            isa<ArrayType>(GEPPointerType->getPointerElementType())) {
+
+          // A GEP is created for each index in a multi-dimensional array.
+          // For counting array instructions and references, use the case where
+          // the pointer operand is an alloca rather than another GEP to
+          // uniquely identify array instructions.
+          if (isa<AllocaInst>(GEPPointer)) {
+            LS->NumberArrayInstructions++;
+
+            // Check if the array index is constant.
+            LS->AllArrayIndicesConstant = 
+                LS->AllArrayIndicesConstant && GEP->hasAllConstantIndices();
+
+            // Check if we've seen the array reference before.
+            StringRef Name = GEPPointer->getName();
+            std::set<StringRef>::iterator I = LS->ReferencedArrays.find(Name);
+            if (I == LS->ReferencedArrays.end()) {
+              LS->ReferencedArrays.insert(Name);
+              LS->NumberArrayReferences++;
+            }
           }
 
-          switch (BO->getOpcode()) {
-            case Instruction::Mul:  // a * b
-            case Instruction::URem: // a % b
-            case Instruction::SRem: // a % b
-            case Instruction::Add:  // a + b
-            case Instruction::Sub:  // a - b
-            case Instruction::Shl:  // a << b
-            case Instruction::LShr: // a >> b
-            case Instruction::AShr: // a >>> b
-            case Instruction::And:  // a & b
-            case Instruction::Or:   // a | b
-            case Instruction::Xor:  // a ^ b
-              LS->NumberGenericInstructions++;
-            default:
-              // Do nothing.
-              break;
-          }
-        } else if (dyn_cast<CallInst>(I)) {
-          LS->NumberCalls++;
-        } else if (
-            const GetElementPtrInst* GEP = dyn_cast<GetElementPtrInst>(I)) {
-          // Nicely, clang on -O0 will produce a GEP for *every* array
-          // access, even to the same constant location multiple times in a
-          // row.
-          if (dyn_cast<PointerType>(GEP->getPointerOperandType()) &&
-              dyn_cast<ArrayType>(GEP->getPointerOperandType()->getPointerElementType())) {
+          // For all array accesses check if the index is the iterator, and
+          // what dimension it strides on. The index is the last element in
+          // the GEP idx list.
+          GetElementPtrInst::const_op_iterator I = GEP->idx_end();
+          --I;
 
-            // Not so nicely, it'll create one for each index in a multi-dim
-            // array. For counting array instructions and references, we should
-            // only look at the outer-most access, where the pointer operand is
-            // an alloca rather than another GEP.
-            if (dyn_cast<AllocaInst>(GEP->getPointerOperand())) {
-              LS->NumberArrayInstructions++;
-
-              // Check if the array index is constant.
-              LS->AllArrayIndicesConstant = 
-                  LS->AllArrayIndicesConstant && GEP->hasAllConstantIndices();
-
-              // Check if we've seen the array reference before.
-              StringRef ArrayName = GEP->getPointerOperand()->getName();
-              std::set<StringRef>::iterator I = 
-                  LS->ReferencedArrays.find(ArrayName);
-              if (I == LS->ReferencedArrays.end()) {
-                LS->ReferencedArrays.insert(ArrayName);
-                LS->NumberArrayReferences++;
-              }
+          if (Instruction* Inst = dyn_cast<Instruction>(*I)) {
+            while (isa<CastInst>(Inst)) {
+              // Work through any casts.
+              Inst = dyn_cast<Instruction>(Inst->getOperand(0));
             }
 
-            // For all array accesses, check if the index is the iterator,
-            // and what dimension it strides on. For an array the access is
-            // the final item in the idx list.
-            GetElementPtrInst::const_op_iterator I = GEP->idx_end();
-            --I; // Move back to the final item.
+            if (LoadInst* LI = dyn_cast<LoadInst>(Inst)) {
+              // The index is a variable.
 
-            if (Instruction* Inst = dyn_cast<Instruction>(*I)) {
-              while (isa<CastInst>(Inst)) {
-                // Work through any casts.
-                Inst = dyn_cast<Instruction>(Inst->getOperand(0));
-              }
+              if (LI->getPointerOperand() == LS->IteratorVariable) {
+                LS->LoopIteratorIsArrayIndex = true;
 
-              if (LoadInst* LI = dyn_cast<LoadInst>(Inst)) {
-                if (LI->getPointerOperand() == LS->IteratorVariable) {
-                  LS->LoopIteratorIsArrayIndex = true;
-
-                  // Need to check if we're the outermost access; if not,
-                  // then we don't only stride on leading dimensions. The
-                  // outermost access has an element type that is *not*
-                  // ArrayType.
-                  ArrayType* AT = dyn_cast<ArrayType>(
-                      GEP->getPointerOperandType()->getPointerElementType());
-                  Type* ElementType = AT->getElementType();
-                  if (dyn_cast<ArrayType>(ElementType)) {
-                    // We are striding on a non-leading dimension!
-                    LS->StridesOnlyOnLeadingDimensions = false;
-                  }
+                // Need to check if we're the outermost access; if not, then we
+                // don't only stride on leading dimensions. The outermost
+                // access has an element type that is NOT ArrayType.
+                ArrayType* AT = dyn_cast<ArrayType>(
+                    GEPPointerType->getPointerElementType());
+                if (isa<ArrayType>(AT->getElementType())) {
+                  // Using the iterator variable as a non-outermost index!
+                  LS->StridesOnlyOnLeadingDimensions = false;
                 }
               }
-            
-              // Check for linear array access. Looks like one of the
-              // following:
-              //   * constant*var (order invariant)
-              //   * constant*var +- constant (order invariant)
-              //   * var +- constant (order invariant)
-              //   * var
-              //   * constant
-              if (BinaryOperator* BO = dyn_cast<BinaryOperator>(Inst)) {
-                errs() << *BO << "\n";
-                if (BO->getOpcode() == Instruction::Add ||
-                    BO->getOpcode() == Instruction::Sub) {
-                  // LHS or RHS must be constant. For simplicity, move any
-                  // constants to the RHS.
-                  if (isa<Constant>(BO->getOperand(0))) {
-                    BO->swapOperands();
-                  }
-
-                  if (isa<Constant>(BO->getOperand(1))) {
-                    // LHS must now be either var or constant*var.
-                    if (!IsLinearMult(BO->getOperand(0)) &&
-                        !isa<LoadInst>(BO->getOperand(0))) {
-                      LS->HasNonLinearArrayAccess = true;
-                    }
-                  } else {
-                    // RHS isn't constant.
-                    LS->HasNonLinearArrayAccess = true;
-                  }
-
-                } else if (BO->getOpcode() == Instruction::Mul) {
-                  if (!IsLinearMult(BO)) {
-                    LS->HasNonLinearArrayAccess = true;
-                  }
-                } else {
-                  LS->HasNonLinearArrayAccess = true;
-                }
-              } else if (!isa<LoadInst>(Inst) && !isa<Constant>(Inst)) {
-                LS->HasNonLinearArrayAccess = true;
-              }
+            }
+          
+            // Check for linear array access.
+            BinaryOperator* BO = dyn_cast<BinaryOperator>(Inst);
+            if (BO && !IsLinearBinaryOperator(BO)) {
+              LS->HasNonLinearArrayAccess = true;
+            } else if (!isa<LoadInst>(Inst) && !isa<Constant>(Inst)) {
+              LS->HasNonLinearArrayAccess = true;
             }
           }
         }
       }
     }
-    return false;
   }
 
   bool LoopFeatureExtraction::doFinalization() {
-    PostProcessLoops();
+    // Finalize the LoopStructs.
+    PostProcessLoopStructs();
 
+    // Output the information.
     errs() << "LoopCount: " << LoopStructs.size() << "\n";
     int count = 0;
     for (std::vector<LoopStruct*>::iterator I = LoopStructs.begin(),
@@ -278,8 +287,7 @@ namespace {
           << "\tHasUnitStride " << LS->HasUnitStride << "\n";
 
       // Second set, counts.
-      llvm::errs() //<< "\tLoop step in body: " << LS->LoopStepInBody << "\n"
-          << "\tNestDepth " << LS->NestDepth << "\n"
+      llvm::errs() << "\tNestDepth " << LS->NestDepth << "\n"
           << "\tNumberArrayReferences " << LS->NumberArrayReferences << "\n"
           << "\tNumberInstructions " << LS->NumberInstructions << "\n"
           << "\tNumberLoads " << LS->NumberLoads << "\n"
@@ -296,7 +304,7 @@ namespace {
           << "\tNumberOtherInstructions " << LS->NumberOtherInstructions
           << "\n";
 
-      // Third set, booleans.
+      // Third set, more booleans.
       llvm::errs() << "\tContainsIfStatement " << LS->ContainsIfStatement
           << "\n"
           << "\tContainsIfInForStatement " << LS->ContainsIfInForStatement
@@ -315,6 +323,8 @@ namespace {
 
       count++;
     }
+
+    // We don't change the CFG.
     return false;
   }
 
@@ -323,27 +333,48 @@ namespace {
     AU.addPreserved<LoopInfo>();
   }
 
-  bool LoopFeatureExtraction::IsLinearMult(Value* V) {
-    BinaryOperator* BO = dyn_cast<BinaryOperator>(V);
-    if (!BO) {
-      return false;
+  bool LoopFeatureExtraction::IsLinearBinaryOperator(BinaryOperator* BO) {
+    // For simplicity, move any constants to the RHS.
+    if (isa<Constant>(BO->getOperand(0))) {
+      BO->swapOperands();
     }
 
-    if (BO->getOpcode() == Instruction::Mul) {
-      // Make any constants be on the RHS.
+    Value* LHS = BO->getOperand(0);
+    Value* RHS = BO->getOperand(1);
+    
+    if (BO->getOpcode() == Instruction::Add ||
+        BO->getOpcode() == Instruction::Sub) {
+
+      if (isa<Constant>(RHS)) {
+        // To be linear, LHS must now be either const*var or var.
+        return isa<LoadInst>(LHS) || IsLinearMult(LHS);
+      }
+
+    } else if (BO->getOpcode() == Instruction::Mul) {
+      return IsLinearMult(BO);
+    }
+
+    return false;
+  }
+
+  bool LoopFeatureExtraction::IsLinearMult(Value* V) {
+    BinaryOperator* BO = dyn_cast<BinaryOperator>(V);
+    if (BO && BO->getOpcode() == Instruction::Mul) {
+      // For simplicity, move any constants to the RHS.
       if (isa<Constant>(BO->getOperand(0))) {
         BO->swapOperands();
       }
 
       // A linear multiplication is defined as var*constant.
       return isa<LoadInst>(BO->getOperand(0)) &&
-          isa<Constant>(BO->getOperand(1)); 
+          isa<Constant>(BO->getOperand(1));
     }
 
     return false;
   }
 
   Instruction* LoopFeatureExtraction::GetIteratorVariable(Loop* L) {
+    // The iterator variable is usually the first load of the loop header.
     BasicBlock* Header = L->getHeader();
     if (Header) {
       Instruction* FirstInst = Header->getFirstNonPHI();
@@ -353,39 +384,47 @@ namespace {
         }
       }
     }
+
     return NULL;
   }
 
-
   void LoopFeatureExtraction::ParseLoopBounds(LoopStruct* LS, Loop* L, LoopInfo& LI) {
-    // The lower bound is actually found in the block before the header.
-    BasicBlock* BeforeHeader = L->getLoopPreheader();
-    if (BeforeHeader) {
-      BasicBlock::iterator I = BeforeHeader->end();
-      while (!isa<StoreInst>(*I) && I != BeforeHeader->begin()) {
+    BasicBlock* Preheader = L->getLoopPreheader();
+    BasicBlock* Header = L->getHeader();
+
+    // The lower bound can assumed to be the last store instruction to
+    // the loop variable before the loop start.
+    if (Preheader) {
+      BasicBlock::iterator I = Preheader->end();
+      while (!isa<StoreInst>(*I) && I != Preheader->begin()) {
         --I;
       }
 
+      // Check if a constant is stored to the loop variable.
       StoreInst* SI = dyn_cast<StoreInst>(I);
-      if (SI && 
-          SI->getPointerOperand() == LS->IteratorVariable &&
+      if (SI && SI->getPointerOperand() == LS->IteratorVariable &&
           isa<Constant>(SI->getValueOperand())) {
         LS->HasConstantLowerBound = true;
       }
     }
 
-    // The upper bound is defined by a compare in the header.
-    BasicBlock* Header = L->getHeader();
+    // The upper bound can be assumed to be the last compare instruction in
+    // the loop header.
     if (Header) {
-      BasicBlock::iterator I = Header->begin();
-      while (isa<PHINode>(I)) {
-        ++I;
+      BasicBlock::iterator I = Header->end();
+      while (!isa<CmpInst>(*I) && I != Header->begin()) {
+        --I;
       }
-      ++I;
 
-      Instruction* SecondInst = &*I;
-      if (CmpInst* CI = dyn_cast<CmpInst>(SecondInst)) {
-        if (isa<Constant>(CI->getOperand(1))) {
+      // Check if the compare is with a constant.
+      if (CmpInst* CI = dyn_cast<CmpInst>(I)) {
+        // Move any constant to RHS for simplicity.
+        if (isa<Constant>(CI->getOperand(0))) {
+          CI->swapOperands();
+        }
+
+        Value* RHS = CI->getOperand(1);
+        if (isa<Constant>(RHS)) {
           LS->HasConstantUpperBound = true;
         }
       }
@@ -394,45 +433,57 @@ namespace {
     // The stride is found in the increment section. Best way to get
     // there is from the header, although it's not pretty.
     if (Header) {
+      // Check the Header's predecessors for the Inc block.
       for (pred_iterator PI = pred_begin(Header), E = pred_end(Header);
           PI != E; PI++) {
-        if (*PI == BeforeHeader) {
+        // Ignore the Preheader.
+        if (*PI == Preheader) {
           continue;
         }
 
-        // The inc block has one successor; the header.
+        // To be sure we have the Inc block, check that it has one successor;
+        // the Header.
         succ_iterator I = succ_begin(*PI), E = succ_end(*PI);
-        --E; // Move back one.
+        --E; // Move to one before the end of the list.
         if (I == E && *I == Header) {
           BasicBlock* Inc = *PI;
 
+          // The increment can usually be found by locating the first load
+          // instruction and looking just past it. This should catch x++,
+          // x += const, and x = x + const. (As well as the minus versions.)
+
+          // Locate the first load.
           BasicBlock::iterator II = Inc->begin();
-          while (!isa<PHINode>(II) && !isa<LoadInst>(II) &&
-              II != Inc->end()) {
+          while (!isa<PHINode>(II) && !isa<LoadInst>(II) && II != Inc->end()) {
             ++II;
           }
 
           LoadInst* LI = dyn_cast<LoadInst>(II);
           if (LI->getPointerOperand() == LS->IteratorVariable) {
-            // Move on and find an increment. Hopefully.
+            // The next instruction should be an increment/decrement.
             ++II;
+
             if (BinaryOperator* BO = dyn_cast<BinaryOperator>(II)) {
-              if (BO->getOperand(0) == LI && BO->getOpcode() == Instruction::Add) {
-                Value* RHS = BO->getOperand(1);
-                if (ConstantInt* CI = dyn_cast<ConstantInt>(RHS)) {
-                  LS->HasConstantStride = true;
-                  LS->HasUnitStride = CI->isOne();
-                  break;
-                }
+              Value* LHS = BO->getOperand(0);
+              Value* RHS = BO->getOperand(1);
+              Instruction::BinaryOps Opcode = BO->getOpcode();
+
+              ConstantInt* CI = dyn_cast<ConstantInt>(RHS);
+              if (CI && LHS == LI &&
+                  (Opcode == Instruction::Add || Opcode == Instruction::Sub)) {
+                LS->HasConstantStride = true;
+                LS->HasUnitStride = CI->isOne();
+                break;
               }
             }
           }
         }
       }
     }
+
   }
 
-  void LoopFeatureExtraction::PostProcessLoops() {
+  void LoopFeatureExtraction::PostProcessLoopStructs() {
     for (std::vector<LoopStruct*>::iterator I = LoopStructs.begin(),
         E = LoopStructs.end(); I != E; ++I) {
       LoopStruct* LS = *I;
@@ -453,6 +504,7 @@ namespace {
       }
 
       LS->HasCalls = LS->NumberCalls > 0;
+
       // A 'no branch' loop has 3 branches: cond -> {body, end}, body -> inc,
       // inc -> cond.
       LS->HasBranches = LS->NumberBranches > 3;
@@ -477,12 +529,11 @@ namespace {
       Loop* Child = *I;
       LoopStruct* ChildLS = findLoopStruct(Child);
       if (!ChildLS) {
-        errs() << "BIG PROBLEM HERE: findLoopStruct failed!\n";
+        errs() << "PROBLEM: findLoopStruct failed!\n";
       }
 
-      if (ChildLS->ContainsIfStatement) {
-        return true;
-      } else if (IfInForStatement(ChildLS)) {
+      if (ChildLS->ContainsIfStatement ||
+          IfInForStatement(ChildLS)) {
         return true;
       }
     }
@@ -549,6 +600,7 @@ namespace {
         return LS;
       }
     }
+
     return NULL;
   }
 }  // End anon namespace.

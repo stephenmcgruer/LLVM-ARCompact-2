@@ -169,12 +169,41 @@ namespace {
   private:
     std::vector<LoopStruct*> LoopStructs;
 
+    // Parses a BasicBlock in a loop.
+    void runOnBasicBlock(const BasicBlock* BB, LoopStruct* LS, LoopInfo& LI);
+
+    // Determines if a BinaryOperator is linear; that is, if it is of
+    // the forms:
+    //   * const*var (order invariant)
+    //   * const*var +- const (order invariant)
+    //   * var +- const (order invariant)
+    //   * var
+    //   * const
+    bool IsLinearBinaryOperator(BinaryOperator* BO);
+
+    // Determines if a Value is a linear multiplication; that is, a
+    // multiplication of the form var * constant.
     bool IsLinearMult(Value* V);
+
+    // Attempts to extract the iterator variable for a loop.
     Instruction* GetIteratorVariable(Loop* L);
+
+    // Parses the loop bounds to determine if it has a constant
+    // upper and lower bound, and the stride size.
     void ParseLoopBounds(LoopStruct* LS, Loop* L, LoopInfo& LI);
-    void PostProcessLoops();
+
+    // Does post processing on the LoopStructs, to set information that isn't
+    // available at the time.
+    void PostProcessLoopStructs();
+
+    // Determines if a Loop represented by a LoopStruct has an if-statement
+    // inside an inner loop.
     bool IfInForStatement(LoopStruct* LS);
+
+    // Determines if a loop represented by a LoopStruct is perfectly nested.
     bool IsPerfectlyNested(LoopStruct* LS);
+
+    // Finds and returns the LoopStruct for a given Loop.
     LoopStruct* findLoopStruct(Loop* L);
   };
 }
