@@ -43,7 +43,7 @@ namespace {
     bool UsesFloatAndIntegers = NumberIntegers > 0 && NumberFloats > 0;
 
     // Dump the information.
-    errs() << "FunctionCount: " << FunctionCount << "\n";
+    errs() << "NumberFunctions: " << FunctionCount << "\n";
     errs() << "NumberIntegers: " << NumberIntegers << "\n";
     errs() << "NumberFloats: " << NumberFloats << "\n";
     errs() << "UsesFloatAndIntegerVariables: " << UsesFloatAndIntegers << "\n";
@@ -75,6 +75,16 @@ namespace {
     ParseLoopBounds(LS, L, LI);
     LS->IsNested = L->getParentLoop() != NULL;
     LS->NestDepth = L->getLoopDepth();
+
+    // Add the children; they should have been parsed before this.
+    for (Loop::iterator I = L->begin(), E = L->end(); I != E; ++I) {
+      LoopStruct* ChildLS = findLoopStruct(*I);
+      if (!ChildLS) {
+        errs() << "PROBLEM: Can't find child!!\n";
+      }
+
+      LS->Children.push_back(ChildLS);
+    }
 
     // Parse each BasicBlock.
     for (Loop::block_iterator BI = L->block_begin(), BE = L->block_end();
@@ -201,16 +211,16 @@ namespace {
         if (isa<PointerType>(GEPPointerType) &&
             isa<ArrayType>(GEPPointerType->getPointerElementType())) {
 
+          // Check if the array index is constant.
+          LS->AllArrayIndicesConstant = 
+              LS->AllArrayIndicesConstant && GEP->hasAllConstantIndices();
+
           // A GEP is created for each index in a multi-dimensional array.
           // For counting array instructions and references, use the case where
           // the pointer operand is an alloca rather than another GEP to
           // uniquely identify array instructions.
           if (isa<AllocaInst>(GEPPointer)) {
             LS->NumberArrayInstructions++;
-
-            // Check if the array index is constant.
-            LS->AllArrayIndicesConstant = 
-                LS->AllArrayIndicesConstant && GEP->hasAllConstantIndices();
 
             // Check if we've seen the array reference before.
             StringRef Name = GEPPointer->getName();
@@ -269,7 +279,7 @@ namespace {
     PostProcessLoopStructs();
 
     // Output the information.
-    errs() << "LoopCount: " << LoopStructs.size() << "\n";
+    errs() << "NumberLoops: " << LoopStructs.size() << "\n";
     int count = 0;
     for (std::vector<LoopStruct*>::iterator I = LoopStructs.begin(),
         E = LoopStructs.end(); I != E; ++I) {
@@ -459,7 +469,7 @@ namespace {
           }
 
           LoadInst* LI = dyn_cast<LoadInst>(II);
-          if (LI->getPointerOperand() == LS->IteratorVariable) {
+          if (LI && LI->getPointerOperand() == LS->IteratorVariable) {
             // The next instruction should be an increment/decrement.
             ++II;
 
@@ -523,15 +533,9 @@ namespace {
   }
 
   bool LoopFeatureExtraction::IfInForStatement(LoopStruct* LS) {
-    Loop* L = LS->TheLoop;
-
-    for (Loop::iterator I = L->begin(), E = L->end(); I != E; I++) {
-      Loop* Child = *I;
-      LoopStruct* ChildLS = findLoopStruct(Child);
-      if (!ChildLS) {
-        errs() << "PROBLEM: findLoopStruct failed!\n";
-      }
-
+    for (std::vector<LoopStruct*>::iterator I = LS->Children.begin(),
+        E = LS->Children.end(); I != E; ++I) {
+      LoopStruct* ChildLS = *I;
       if (ChildLS->ContainsIfStatement ||
           IfInForStatement(ChildLS)) {
         return true;
@@ -542,9 +546,7 @@ namespace {
   }
 
   bool LoopFeatureExtraction::IsPerfectlyNested(LoopStruct* LS) {
-    Loop* L = LS->TheLoop;
-
-    if ((L->end() - L->begin()) == 0) {
+    if (LS->Children.empty()) {
       // A loop with no children is perfect if it doesnt have any
       // conditional statements or jumps.
 
@@ -552,12 +554,9 @@ namespace {
     } else {
       // Otherwise, we require that we have only one, perfectly nested child,
       // and no other instructions.
-      if ((L->end() - L->begin()) != 1) {
+      if (LS->Children.size() != 1) {
         return false;
       }
-
-      Loop* Child = *L->begin();
-      LoopStruct* ChildLS = findLoopStruct(Child);
 
       // A perfectly nested loop with child has 4 branches: one from the
       // condition to either the body or the exit, one from the increment
@@ -588,10 +587,13 @@ namespace {
         return false;
       }
 
+      // Finally, check if our child is perfectly nested.
+      LoopStruct* ChildLS = LS->Children.at(0);
       return IsPerfectlyNested(ChildLS);
     }
   }
 
+  // ONLY GOOD WHILE IN runOnLoop!
   LoopStruct* LoopFeatureExtraction::findLoopStruct(Loop* L) {
     for (std::vector<LoopStruct*>::iterator I = LoopStructs.begin(),
         E = LoopStructs.end(); I != E; ++I) {
