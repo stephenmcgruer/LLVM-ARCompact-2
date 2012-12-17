@@ -86,6 +86,7 @@ using namespace llvm;
  *   mem                               SP  +-----------------------+
  */
 
+#include <iostream>
 void ARCompactFrameLowering::emitPrologue(MachineFunction &MF) const {
   //dbgs() << "Prologue\n";
   MachineBasicBlock &MBB = MF.front();
@@ -117,12 +118,13 @@ void ARCompactFrameLowering::emitPrologue(MachineFunction &MF) const {
 
   // TODO: Create the register save area, and save the required registers to it.
 
-  // Save the caller's frame pointer (if required), and set new FP to this
-  // location.
+  // Save the caller's frame pointer.
   BuildMI(MBB, MBBI, dl, TII.get(ARC::STrri_a))
       .addReg(ARC::SP)
       .addImm(-UNITS_PER_WORD)
       .addReg(ARC::FP);
+
+  // Set FP = SP.
   BuildMI(MBB, MBBI, dl, TII.get(ARC::MOVrr), ARC::FP).addReg(ARC::SP);
 
   // Allocate space for local registers.

@@ -18,6 +18,8 @@
 using namespace llvm;
 
 ARCompactMCAsmInfo::ARCompactMCAsmInfo(const Target &T, StringRef TT) {
+  // We do not have .quad!
+  Data64bitsDirective = NULL;
   UsesELFSectionDirectiveForBSS = true;
   IsLittleEndian = true;
   Triple TheTriple(TT);
