@@ -64,7 +64,6 @@ namespace {
     //   * Does the loop have regular control flow?
 
     Loop* TheLoop;
-    std::vector<LoopStruct*> Children;
     Instruction* IteratorVariable;
     std::set<StringRef> ReferencedArrays;
 
@@ -146,7 +145,7 @@ namespace {
     static char ID; // Pass identification, replacement for typeid
     FunctionFeatureExtraction() 
         : FunctionPass(ID), FunctionCount(0), NumberFloats(0),
-          NumberIntegers(0) { }
+          NumberIntegers(0) {}
 
     virtual bool runOnFunction(Function &F);
     virtual bool doFinalization(Module &M);
@@ -160,7 +159,7 @@ namespace {
   class LoopFeatureExtraction : public LoopPass {
   public:
     static char ID; // Pass identification, replacement for typeid
-    LoopFeatureExtraction() : LoopPass(ID) { }
+    LoopFeatureExtraction() : LoopPass(ID) {}
     ~LoopFeatureExtraction();
 
     virtual bool runOnLoop(Loop *L, LPPassManager &LPM);
