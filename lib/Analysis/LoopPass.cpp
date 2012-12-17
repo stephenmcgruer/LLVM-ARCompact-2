@@ -273,6 +273,12 @@ bool LPPassManager::runOnFunction(Function &F) {
       LQ.push_back(CurrentLoop);
   }
 
+  // Finalization
+  for (unsigned Index = 0; Index < getNumContainedPasses(); ++Index) {
+    LoopPass *P = getContainedPass(Index);
+    Changed |= P->doFinalization();
+  }
+
   return Changed;
 }
 
@@ -284,19 +290,6 @@ void LPPassManager::dumpPassStructure(unsigned Offset) {
     P->dumpPassStructure(Offset + 1);
     dumpLastUses(P, Offset+1);
   }
-}
-
-/// Run all of the finalizers for the loop passes.
-bool LPPassManager::doFinalization(Module &M) {
-  bool Changed = false;
-
-  // Finalization
-  for (unsigned Index = 0; Index < getNumContainedPasses(); ++Index) {
-    LoopPass *P = getContainedPass(Index);
-    Changed |= P->doFinalization();
-  }
-
-  return Changed;
 }
 
 

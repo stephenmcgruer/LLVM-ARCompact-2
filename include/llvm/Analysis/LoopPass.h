@@ -90,10 +90,6 @@ public:
   /// whether any of the passes modifies the module, and if so, return true.
   bool runOnFunction(Function &F);
 
-  /// doFinalization - Run all of the finalizers for the loop passes.
-  ///
-  virtual bool doFinalization(Module &M);
-
   /// Pass Manager itself does not invalidate any analysis info.
   // LPPassManager needs LoopInfo.
   void getAnalysisUsage(AnalysisUsage &Info) const;
